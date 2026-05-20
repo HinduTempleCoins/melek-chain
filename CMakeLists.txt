@@ -256,7 +256,9 @@ add_subdirectory( external_plugins )
 add_subdirectory( libraries )
 add_subdirectory( programs )
 
-add_subdirectory( tests )
+if( BUILD_TESTING )
+    add_subdirectory( tests )
+endif()
 
 if (ENABLE_INSTALLER)
 
