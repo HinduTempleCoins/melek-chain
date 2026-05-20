@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <clipPath id="c">
+      <circle cx="100" cy="100" r="99"/>
+    </clipPath>
+  </defs>
+  <!-- Kurdish flag: red | white | green vertical stripes -->
+  <rect x="0"   y="0" width="67"  height="200" fill="#CE1126" clip-path="url(#c)"/>
+  <rect x="67"  y="0" width="66"  height="200" fill="#FFFFFF" clip-path="url(#c)"/>
+  <rect x="133" y="0" width="67"  height="200" fill="#007A3D" clip-path="url(#c)"/>
+  <!-- 21-pointed Roj (Kurdish sun) enlarged to dominate the flag, matching the header banner -->
+  <polygon
+    fill="#F7D116"
+    transform="translate(100 100) scale(2) translate(-100 -100)"
+    points="
+      100,60       102.99,80.22
+      111.82,61.79 108.68,81.98
+      122.72,67.08 113.68,85.41
+      131.27,75.06 117.32,90.00
+      137.22,85.34 119.50,95.55
+      139.89,97.01 119.94,101.49
+      139.00,108.90 118.61,107.33
+      134.64,120.00 115.64,112.47
+      127.36,129.18 111.36,116.46
+      117.36,136.04 105.91,119.11
+      105.98,139.55 100.00,120.00
+      94.02,139.55  94.09,119.11
+      82.64,136.04  88.64,116.46
+      72.64,129.18  84.36,112.47
+      65.36,120.00  81.39,107.33
+      61.00,108.90  80.06,101.49
+      60.11,97.01   80.50,95.55
+      62.78,85.34   82.68,90.00
+      68.73,75.06   86.32,85.41
+      77.28,67.08   91.32,81.98
+      88.18,61.79   97.01,80.22
+    "
+  />
+  <!-- Circle border -->
+  <circle cx="100" cy="100" r="99" fill="none" stroke="#00000022" stroke-width="1"/>
+</svg>
