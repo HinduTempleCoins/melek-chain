@@ -43,17 +43,23 @@
 /// Allows to limit number of total produced blocks.
 #define TESTNET_BLOCK_LIMIT                   (3000000)
 
-#else // IS LIVE STEEM NETWORK
+#else // IS LIVE MELEK NETWORK (forked from STEEM/BLURT — see HinduTempleCoins/MELEK CLAUDE.md)
 
 #define STEEM_BLOCKCHAIN_VERSION              ( version(0, 22, 1) )
 #define STEEM_NETWORK_TYPE                    "mainnet"
 
-#define STEEM_INIT_PUBLIC_KEY_STR             "STM8GC13uCZbP44HzMLV6zPZGwVQ8Nt4Kji8PapsPiNq1BK153XTX"
-#define STEEM_CHAIN_ID fc::sha256()
-#define STEEM_ADDRESS_PREFIX                  "STM"
+// FIXME: Witness operator MUST replace before mainnet launch.
+// Currently derived from a deterministic seed so the chain compiles & boots
+// in dev/testnet builds. Matching private key: regenerate(sha256::hash("melek_init_key")).
+#define STEEM_INIT_PRIVATE_KEY                (fc::ecc::private_key::regenerate(fc::sha256::hash(std::string("melek_init_key"))))
+#define STEEM_INIT_PUBLIC_KEY_STR             (std::string( steem::protocol::public_key_type(STEEM_INIT_PRIVATE_KEY.get_public_key()) ))
+#define STEEM_CHAIN_ID                        (fc::sha256::hash(std::string("melek-mainnet-v1-genesis")))
+#define STEEM_ADDRESS_PREFIX                  "MELEK"
 
-#define STEEM_GENESIS_TIME                    (fc::time_point_sec(1458835200))
-#define STEEM_MINING_TIME                     (fc::time_point_sec(1458838800))
+// FIXME: Replace with actual launch UNIX timestamp before genesis block.
+// Placeholder: 2026-06-01 00:00:00 UTC.
+#define STEEM_GENESIS_TIME                    (fc::time_point_sec(1748736000))
+#define STEEM_MINING_TIME                     (fc::time_point_sec(1748736000))
 #define STEEM_CASHOUT_WINDOW_SECONDS_PRE_HF12 (60*60*24)    /// 1 day
 #define STEEM_CASHOUT_WINDOW_SECONDS_PRE_HF17 (60*60*12)    /// 12 hours
 #define STEEM_CASHOUT_WINDOW_SECONDS          (60*60*24*7)  /// 7 days
@@ -69,7 +75,8 @@
 #define STEEM_OWNER_AUTH_RECOVERY_PERIOD                  fc::days(30)
 #define STEEM_ACCOUNT_RECOVERY_REQUEST_EXPIRATION_PERIOD  fc::days(1)
 #define STEEM_OWNER_UPDATE_LIMIT                          fc::minutes(60)
-#define STEEM_OWNER_AUTH_HISTORY_TRACKING_START_BLOCK_NUM 3186477
+// MELEK: lowered from Blurt default 3186477. Fresh chain -> tracking from block 1.
+#define STEEM_OWNER_AUTH_HISTORY_TRACKING_START_BLOCK_NUM 1
 
 #define STEEM_INIT_SUPPLY                     int64_t(0)
 #define STEEM_SBD_INIT_SUPPLY                 int64_t(0)
@@ -88,11 +95,22 @@
 #define STEEM_100_PERCENT                     10000
 #define STEEM_1_PERCENT                       (STEEM_100_PERCENT/100)
 
-#define STEEM_BLOCK_INTERVAL                  3
+// MELEK: 4-second block time (locked per HinduTempleCoins/MELEK CLAUDE.md).
+// Cascades into BLOCKS_PER_YEAR, BLOCKS_PER_DAY, BLOCKS_PER_HOUR,
+// witness round timing, and per-block reward math.
+#define STEEM_BLOCK_INTERVAL                  4
 #define STEEM_BLOCKS_PER_YEAR                 (365*24*60*60/STEEM_BLOCK_INTERVAL)
 #define STEEM_BLOCKS_PER_DAY                  (24*60*60/STEEM_BLOCK_INTERVAL)
-#define STEEM_START_VESTING_BLOCK             (STEEM_BLOCKS_PER_DAY * 7)
-#define STEEM_START_MINER_VOTING_BLOCK        (STEEM_BLOCKS_PER_DAY * 30)
+// MELEK: lowered from BLOCKS_PER_DAY * 7 / * 30. Fresh chain has no pre-existing
+// state to migrate; witness elections & vesting payouts open at block 1.
+#define STEEM_START_VESTING_BLOCK             (1)
+#define STEEM_START_MINER_VOTING_BLOCK        (1)
+
+// MELEK economics: flat emission, no decay, hard cutoff.
+// 1 MELEK per block * 270 years * (BLOCKS_PER_YEAR at 4s) ~= 2.13B MELEK total.
+// After STEEM_EMISSION_END_BLOCK, block reward is zero. No tail emission.
+#define STEEM_BLOCK_REWARD_AMOUNT             int64_t(1000)  // 1.000 MELEK (3-digit precision)
+#define STEEM_EMISSION_END_BLOCK              (uint32_t(STEEM_BLOCKS_PER_YEAR) * 270u)
 
 #define STEEM_INIT_MINER_NAME                 "initminer"
 #define STEEM_NUM_INIT_MINERS                 1
@@ -229,10 +247,12 @@
 
 #define STEEM_MIN_PAYOUT_SBD                  (asset(20,SBD_SYMBOL))
 
-#define STEEM_SBD_STOP_PERCENT_HF14           (5*STEEM_1_PERCENT ) // Stop printing SBD at 5% Market Cap
-#define STEEM_SBD_STOP_PERCENT_HF20           (10*STEEM_1_PERCENT ) // Stop printing SBD at 10% Market Cap
-#define STEEM_SBD_START_PERCENT_HF14          (2*STEEM_1_PERCENT) // Start reducing printing of SBD at 2% Market Cap
-#define STEEM_SBD_START_PERCENT_HF20          (9*STEEM_1_PERCENT) // Start reducing printing of SBD at 9% Market Cap
+// MELEK: SBD-equivalent is disabled (single native token only — see CLAUDE.md).
+// All print-rate thresholds set to 0 so the SBD code path, if reached, never mints.
+#define STEEM_SBD_STOP_PERCENT_HF14           (0) // SBD never prints on MELEK
+#define STEEM_SBD_STOP_PERCENT_HF20           (0) // SBD never prints on MELEK
+#define STEEM_SBD_START_PERCENT_HF14          (0) // SBD never prints on MELEK
+#define STEEM_SBD_START_PERCENT_HF20          (0) // SBD never prints on MELEK
 
 #define STEEM_MIN_ACCOUNT_NAME_LENGTH          3
 #define STEEM_MAX_ACCOUNT_NAME_LENGTH         16
@@ -342,7 +362,7 @@
 /// Represents the canonical root post parent account
 #define STEEM_ROOT_POST_PARENT                (account_name_type())
 /// Represents the account with NO authority which holds resources for payouts according to given proposals
-#define STEEM_TREASURY_ACCOUNT                "steem.dao"
+#define STEEM_TREASURY_ACCOUNT                "melek.dao"
 ///@}
 
 /// STEEM PROPOSAL SYSTEM support

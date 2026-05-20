@@ -2120,17 +2120,22 @@ void database::process_funds()
    if( has_hardfork( STEEM_HARDFORK_0_16__551) )
    {
       /**
-       * At block 7,000,000 have a 9.5% instantaneous inflation rate, decreasing to 0.95% at a rate of 0.01%
-       * every 250k blocks. This narrowing will take approximately 20.5 years and will complete on block 220,750,000
+       * MELEK emission policy (see HinduTempleCoins/MELEK CLAUDE.md):
+       *
+       *   - Flat 1 MELEK (= STEEM_BLOCK_REWARD_AMOUNT) minted per block.
+       *   - Hard cutoff at STEEM_EMISSION_END_BLOCK (~270 years).
+       *     After that, block reward is zero. No tail emission.
+       *   - Split per dynamic_global_property percentages (content / vesting / sps / witness),
+       *     same machinery as STEEM/BLURT — only the source-amount changes.
+       *   - sps_fund is paid to STEEM_TREASURY_ACCOUNT directly in MELEK
+       *     (no SBD conversion — MELEK has no SBD).
+       *
+       * The unused 'feed' reference and pre-HF16 APR-percent logic from STEEM are gone.
        */
-      int64_t start_inflation_rate = int64_t( STEEM_INFLATION_RATE_START_PERCENT );
-      int64_t inflation_rate_adjustment = int64_t( head_block_num() / STEEM_INFLATION_NARROWING_PERIOD );
-      int64_t inflation_rate_floor = int64_t( STEEM_INFLATION_RATE_STOP_PERCENT );
+      int64_t new_steem = ( head_block_num() <= STEEM_EMISSION_END_BLOCK )
+                          ? int64_t( STEEM_BLOCK_REWARD_AMOUNT )
+                          : int64_t( 0 );
 
-      // below subtraction cannot underflow int64_t because inflation_rate_adjustment is <2^32
-      int64_t current_inflation_rate = std::max( start_inflation_rate - inflation_rate_adjustment, inflation_rate_floor );
-
-      auto new_steem = ( props.virtual_supply.amount * current_inflation_rate ) / ( int64_t( STEEM_100_PERCENT ) * int64_t( STEEM_BLOCKS_PER_YEAR ) );
       auto content_reward = ( new_steem * props.content_reward_percent ) / STEEM_100_PERCENT;
       if( has_hardfork( STEEM_HARDFORK_0_17__774 ) )
          content_reward = pay_reward_funds( content_reward );
@@ -2152,12 +2157,10 @@ void database::process_funds()
 
       witness_reward /= wso.witness_pay_normalization_factor;
 
-      auto new_sbd = asset( 0, SBD_SYMBOL );
-
-      if( sps_fund.value )
+      // MELEK: pay sps_fund directly to treasury in MELEK (no SBD conversion).
+      if( sps_fund > 0 )
       {
-         new_sbd = asset( sps_fund, STEEM_SYMBOL ) * feed.current_median_history;
-         adjust_balance( STEEM_TREASURY_ACCOUNT, new_sbd );
+         adjust_balance( STEEM_TREASURY_ACCOUNT, asset( sps_fund, STEEM_SYMBOL ) );
       }
 
       new_steem = content_reward + vesting_reward + witness_reward;
@@ -2167,10 +2170,8 @@ void database::process_funds()
          p.total_vesting_fund_steem += asset( vesting_reward, STEEM_SYMBOL );
          if( !has_hardfork( STEEM_HARDFORK_0_17__774 ) )
             p.total_reward_fund_steem  += asset( content_reward, STEEM_SYMBOL );
-         p.current_supply      += asset( new_steem, STEEM_SYMBOL );
-         p.current_sbd_supply  += new_sbd;
+         p.current_supply      += asset( new_steem + sps_fund, STEEM_SYMBOL );
          p.virtual_supply      += asset( new_steem + sps_fund, STEEM_SYMBOL );
-         p.sps_interval_ledger += new_sbd;
       });
 
       operation vop = producer_reward_operation( cwit.owner, asset( 0, VESTS_SYMBOL ) );

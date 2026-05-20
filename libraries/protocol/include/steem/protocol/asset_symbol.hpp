@@ -43,13 +43,19 @@
 
 #else
 
+// MELEK mainnet symbols (see HinduTempleCoins/MELEK CLAUDE.md):
+//   - STEEM_SYMBOL = liquid token MELEK
+//   - VESTS_SYMBOL = vesting; displayed as "MELEK POWER" in higher layers
+//   - SBD_SYMBOL   = no SBD on MELEK; symbol name retained as MBD only for
+//     code paths still referencing SBD_SYMBOL. Print thresholds are 0 in
+//     config.hpp so this symbol is never actually minted.
 #define VESTS_SYMBOL_STR "VESTS"
-#define STEEM_SYMBOL_STR "STEEM"
-#define SBD_SYMBOL_STR   "SBD"
+#define STEEM_SYMBOL_STR "MELEK"
+#define SBD_SYMBOL_STR   "MBD"
 
 #define VESTS_SYMBOL_U64  (uint64_t('V') | (uint64_t('E') << 8) | (uint64_t('S') << 16) | (uint64_t('T') << 24) | (uint64_t('S') << 32))
-#define STEEM_SYMBOL_U64  (uint64_t('S') | (uint64_t('T') << 8) | (uint64_t('E') << 16) | (uint64_t('E') << 24) | (uint64_t('M') << 32))
-#define SBD_SYMBOL_U64    (uint64_t('S') | (uint64_t('B') << 8) | (uint64_t('D') << 16))
+#define STEEM_SYMBOL_U64  (uint64_t('M') | (uint64_t('E') << 8) | (uint64_t('L') << 16) | (uint64_t('E') << 24) | (uint64_t('K') << 32))
+#define SBD_SYMBOL_U64    (uint64_t('M') | (uint64_t('B') << 8) | (uint64_t('D') << 16))
 
 #endif
 

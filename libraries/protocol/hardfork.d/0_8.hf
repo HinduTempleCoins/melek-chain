@@ -4,6 +4,6 @@
 
 // Mon Jul  4 01:00:00 UTC 2016
 // Sun Jul  3 21:00:00 EDT 2016
-#define STEEM_HARDFORK_0_8_TIME 1467594000
+#define STEEM_HARDFORK_0_8_TIME 1 // MELEK: was historical Steem/Blurt date; collapsed to genesis
 #define STEEM_HARDFORK_0_8_VERSION hardfork_version( 0, 8 )
 #endif

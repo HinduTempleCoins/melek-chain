@@ -15,7 +15,7 @@
 #define STEEM_HARDFORK_0_14__410 (STEEM_HARDFORK_0_14)
 
 
-#define STEEM_HARDFORK_0_14_TIME  1474383600 // Tue, 20 Sep 2016 15:00:00 GMT
+#define STEEM_HARDFORK_0_14_TIME  1 // MELEK: was historical Steem/Blurt date; collapsed to genesis // Tue, 20 Sep 2016 15:00:00 GMT
 
 #define STEEM_HARDFORK_0_14_VERSION hardfork_version( 0, 14 )
 
