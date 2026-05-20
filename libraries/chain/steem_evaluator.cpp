@@ -307,7 +307,7 @@ void initialize_account_object( account_object& acc, const account_name_type& na
    }
    else
    {
-      acc.recovery_account = "steem";
+      acc.recovery_account = "melek";
    }
 }
 
