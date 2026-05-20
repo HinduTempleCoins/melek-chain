@@ -210,6 +210,20 @@
 #define STEEM_CONTENT_CONSTANT_HF0            (uint128_t(uint64_t(2000000000000ll)))
 // note, if redefining these constants make sure calculate_claims doesn't overflow
 
+// ============================================================================
+// MELEK: VESTIGIAL — these APR_PERCENT magic constants are pre-computed for
+// STEEM's 3-second block interval. With MELEK's 4-second blocks they are
+// MATHEMATICALLY WRONG. They survive only because:
+//   - compound.hpp's calc_percent_reward<percent, MULTIPLY, SHIFT>() uses them
+//   - database.cpp's get_content_reward / get_curation_reward / get_producer_reward
+//     / get_liquidity_reward / get_pow_reward call those (pre-HF16 path)
+//   - process_funds() takes the post-HF16 path which we rewrote to flat emission,
+//     so the pre-HF16 path is unreachable on MELEK
+//   - removing them requires also removing all five callsites + compound.hpp +
+//     the get_config.cpp exports, and that refactor is deferred
+// Until the cleanup pass, treat the get_config API output for these keys as
+// not-applicable on MELEK; the actual on-chain reward math is in process_funds().
+// ============================================================================
 // 5ccc e802 de5f
 // int(expm1( log1p( 1 ) / BLOCKS_PER_YEAR ) * 2**STEEM_APR_PERCENT_SHIFT_PER_BLOCK / 100000 + 0.5)
 // we use 100000 here instead of 10000 because we end up creating an additional 9x for vesting
