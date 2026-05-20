@@ -39,12 +39,14 @@ fc::variant_object get_config()
    result["STEEM_ACTIVE_CHALLENGE_COOLDOWN"] = STEEM_ACTIVE_CHALLENGE_COOLDOWN;
    result["STEEM_ACTIVE_CHALLENGE_FEE"] = STEEM_ACTIVE_CHALLENGE_FEE;
    result["STEEM_ADDRESS_PREFIX"] = STEEM_ADDRESS_PREFIX;
-   result["STEEM_APR_PERCENT_MULTIPLY_PER_BLOCK"] = STEEM_APR_PERCENT_MULTIPLY_PER_BLOCK;
-   result["STEEM_APR_PERCENT_MULTIPLY_PER_HOUR"] = STEEM_APR_PERCENT_MULTIPLY_PER_HOUR;
-   result["STEEM_APR_PERCENT_MULTIPLY_PER_ROUND"] = STEEM_APR_PERCENT_MULTIPLY_PER_ROUND;
-   result["STEEM_APR_PERCENT_SHIFT_PER_BLOCK"] = STEEM_APR_PERCENT_SHIFT_PER_BLOCK;
-   result["STEEM_APR_PERCENT_SHIFT_PER_HOUR"] = STEEM_APR_PERCENT_SHIFT_PER_HOUR;
-   result["STEEM_APR_PERCENT_SHIFT_PER_ROUND"] = STEEM_APR_PERCENT_SHIFT_PER_ROUND;
+   // MELEK: STEEM_APR_PERCENT_MULTIPLY_PER_{BLOCK,HOUR,ROUND} and the matching
+   // _SHIFT_PER_* constants are intentionally NOT exposed via get_config. Their
+   // values are pre-computed for STEEM's 3-second block interval and are
+   // mathematically incorrect for MELEK's 4-second blocks. The constants
+   // remain in config.hpp for compile-compatibility with compound.hpp (whose
+   // callers are unreachable under our flat-emission process_funds). Until
+   // the full cleanup pass removes them entirely, hiding them from the API
+   // prevents third-party tools from consuming nonsense values.
    result["STEEM_BANDWIDTH_AVERAGE_WINDOW_SECONDS"] = STEEM_BANDWIDTH_AVERAGE_WINDOW_SECONDS;
    result["STEEM_BANDWIDTH_PRECISION"] = STEEM_BANDWIDTH_PRECISION;
    result["STEEM_BENEFICIARY_LIMIT"] = STEEM_BENEFICIARY_LIMIT;
