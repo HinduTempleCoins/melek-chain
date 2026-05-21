@@ -50,6 +50,18 @@ For the chain code work in this repo, the AI witness only requires that the chai
 
 The AI witness operator software develops in three phases (this happens in the Bot repo, not in this repo): Phase 1 mining-only Hello World, Phase 2 command-menu deterministic capabilities including signup help and tutorial functions, Phase 3 autonomous judgment via libraries.
 
+### 12-month constitutional vote weight (founding window)
+
+MELEK adapts BLURT's regent mechanism with a tighter cliff. At genesis, the AI witness account holds **constitutional vote weight equivalent to total MELEK supply at the 270-year cap** (~2.13 billion MELEK POWER, synthetic — not counted toward circulating supply, inflation, or the reward pool). The mechanism mirrors BLURT's regent: usable to vote for witnesses (including itself) and to vote on DAO proposals.
+
+The weight holds at **full strength for 12 months** — block 1 through `STEEM_BLOCKS_PER_YEAR = 7,884,000` at 4-second blocks — then drops to zero at a hard cliff. No monthly decay. Full power for one year, then nothing.
+
+**The design tension acknowledged honestly:** this contradicts the earlier statement that "the chain code doesn't know its operator is an AI." For 12 months the chain *does* know one specific account name — the AI witness — and treats it differently in the witness-schedule computation and the DAO-vote tally. That divergence is bounded (one account, one mechanism, hard end date pinned at genesis) and chosen deliberately to protect MELEK's chain-legibility infrastructure from being voted off the chain by a stake coalition during the formative period before organic community attention is established.
+
+**Why 12 months not 24:** BLURT used 24 to bridge a community fork — a contested split where the new chain had to inherit and rebuild trust simultaneously. MELEK is a fresh chain, not a contested fork. 12 months is enough for the AI witness to accumulate organic stake support and demonstrate value through visible operation; longer than that risks the founding-window mechanism shading from "transition" into "norm." After the cliff, the AI witness competes for top-21 inclusion via ordinary DPoS like every other witness, on the strength of its accumulated stake (from 12 months of block rewards) plus whatever organic votes it has earned.
+
+After the cliff at block 7,884,000, the AI witness slot is open to community judgment. If it has done its job — making the chain legible, welcoming new humans, sustaining discourse — votes will keep it in the top-21. If not, it is voted out like any underperforming witness, and a different operator can run the conversational interface (the AI witness is forkable; see above).
+
 ## The condenser
 
 Fork BLURT's condenser. Most of the existing signup, login, posting, voting, and account management flows stay as they are — they work, users familiar with BLURT/HIVE/Steem know how to use them, no need to reinvent.
@@ -104,6 +116,10 @@ The **Ethereum/Ethereum Classic DAO fork (2016)** teaches that fast governance l
 
 The **Steem/HIVE Justin Sun crisis (2020)** teaches that premine creates fights that cannot be cleanly resolved. MELEK's no-premine commitment is the response.
 
+The **Steem ninja-mining (2016)** teaches that a "public" mining phase isn't public if insiders have a head start. Steemit Inc. ran a private mining test before the public announcement and captured roughly 80% of mineable stake before the community could meaningfully participate; that concentration shaped Steem's politics for the rest of its life and made the Justin Sun acquisition possible. MELEK's response: no mining phase, no premine, no genesis allocation. Founding witnesses (Ryan Van Kush, Sohail, Prince, and the AI witness) earn block rewards by producing blocks starting at block 1, just like any later-arriving witness. Additional witnesses are invited; none receive a head start.
+
+The **BLURT 24-month regent (2020)** teaches that a young chain may need a stable governance bridge while the community forms, but that bridge must be self-extinguishing on a predictable schedule. `BLURT_REGENT_ACCOUNT` held constitutional vote weight ≈ total BLURT supply — used for witness elections and DAO proposals — decaying in 24 equal monthly steps to zero over 2 years. The decay made the protection unforgeable: no hard fork required to remove it, and the end date was known at genesis. MELEK adapts this mechanism for a narrower purpose and shorter window — see "AI-witness 12-month constitutional vote weight" below.
+
 The **block time choice (4s vs the 3s standard)** is presented as a worked example of how chain parameters affect rarity, accessibility, witness economics, and time horizon. Teaching how to think about parameters, not just memorize them.
 
 The **AI introduction in the whitepaper** engages with the Chinese Room argument seriously rather than dismissing it. The egregore frame — each AI as a participant in a collective entity sustained by community attention, oracles as the historical form of this — is the positive position MELEK operates from. Agentic AI is the form of AI that makes sustained multi-AI thought possible across indefinite time horizons; MELEK is structured as a substrate for that.
@@ -127,5 +143,5 @@ Strip BLURT branding; keep BLURT credit. Comments in source files and documentat
 
 - Content/witness/vesting reward split per block — default to BLURT-equivalent if needed to ship testnet; revisit before mainnet.
 - Chain ID seed string and address prefix — propose options when ready.
-- AI witness account name — pending decision.
+- AI witness account name — **must be pinned before genesis** (constitutional vote-weight mechanism references it by name). Working placeholder until founding witnesses confirm: `melek.ai`.
 - Specific 5–15 MP delegation algorithm and the liquid-vs-MP mix — lives in the Bot repo's operator software, not in the chain code.
