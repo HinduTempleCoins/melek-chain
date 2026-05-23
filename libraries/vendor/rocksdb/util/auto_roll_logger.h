@@ -7,6 +7,8 @@
 // where enough posix functionality is available.
 
 #pragma once
+
+#include <cstdint>  // MELEK: GCC 13+ no longer transitively includes cstdint
 #include <list>
 #include <string>
 

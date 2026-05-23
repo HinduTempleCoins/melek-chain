@@ -27,6 +27,8 @@
 // This means user might not always get full information, but whenever
 // returned by the GetThreadList() is guaranteed to be consistent.
 #pragma once
+
+#include <cstdint>  // MELEK: GCC 13+ no longer transitively includes cstdint
 #include <atomic>
 #include <list>
 #include <memory>

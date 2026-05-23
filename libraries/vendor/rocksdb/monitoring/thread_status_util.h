@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <cstdint>  // MELEK: GCC 13+ no longer transitively includes cstdint
+
 #include <string>
 
 #include "monitoring/thread_status_updater.h"

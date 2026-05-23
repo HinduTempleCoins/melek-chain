@@ -3,6 +3,8 @@
 //  COPYING file in the root directory) and Apache 2.0 License
 //  (found in the LICENSE.Apache file in the root directory).
 #pragma once
+
+#include <cstdint>  // MELEK: GCC 13+ no longer transitively includes cstdint
 #ifndef ROCKSDB_LITE
 
 #include <memory>

@@ -8,6 +8,8 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #pragma once
+
+#include <cstdint>  // MELEK: GCC 13+ no longer transitively includes cstdint
 #include "table/block.h"
 #include "table/format.h"
 #include "util/memory_allocator.h"

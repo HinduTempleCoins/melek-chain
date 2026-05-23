@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <cstdint>  // MELEK: GCC 13+ no longer transitively includes cstdint
+
 #include "rocksdb/trace_reader_writer.h"
 
 namespace rocksdb {

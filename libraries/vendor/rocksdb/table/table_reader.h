@@ -8,6 +8,8 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #pragma once
+
+#include <cstdint>  // MELEK: GCC 13+ no longer transitively includes cstdint
 #include <memory>
 #include "db/range_tombstone_fragmenter.h"
 #include "rocksdb/slice_transform.h"

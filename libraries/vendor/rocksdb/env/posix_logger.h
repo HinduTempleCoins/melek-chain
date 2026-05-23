@@ -11,6 +11,8 @@
 // where enough posix functionality is available.
 
 #pragma once
+
+#include <cstdint>  // MELEK: GCC 13+ no longer transitively includes cstdint
 #include <algorithm>
 #include <stdio.h>
 #include "port/sys_time.h"

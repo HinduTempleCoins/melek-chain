@@ -27,6 +27,8 @@
 
 #pragma once
 
+#include <cstdint>  // MELEK: GCC 13+ no longer transitively includes cstdint
+
 #include <stack>
 #include "FbsonDocument.h"
 #include "FbsonStream.h"

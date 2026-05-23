@@ -8,6 +8,8 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 #pragma once
 
+#include <cstdint>  // MELEK: GCC 13+ no longer transitively includes cstdint
+
 #ifndef ROCKSDB_LITE
 
 #include <functional>

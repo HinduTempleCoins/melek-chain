@@ -9,6 +9,8 @@
 //
 #pragma once
 
+#include <cstdint>  // MELEK: GCC 13+ no longer transitively includes cstdint
+
 #include <algorithm>
 #include <limits>
 #ifdef ROCKSDB_MALLOC_USABLE_SIZE

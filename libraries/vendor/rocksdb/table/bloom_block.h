@@ -4,6 +4,8 @@
 //  (found in the LICENSE.Apache file in the root directory).
 #pragma once
 
+#include <cstdint>  // MELEK: GCC 13+ no longer transitively includes cstdint
+
 #include <vector>
 #include <string>
 #include "util/dynamic_bloom.h"

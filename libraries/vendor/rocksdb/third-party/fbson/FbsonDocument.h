@@ -57,6 +57,8 @@
 
 #pragma once
 
+#include <cstdint>  // MELEK: GCC 13+ no longer transitively includes cstdint
+
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>

@@ -5,6 +5,8 @@
 //
 #pragma once
 
+#include <cstdint>  // MELEK: GCC 13+ no longer transitively includes cstdint
+
 #ifndef ROCKSDB_LITE
 
 #include <assert.h>

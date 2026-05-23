@@ -18,6 +18,8 @@
 // synchronization on all accesses.
 
 #pragma once
+
+#include <cstdint>  // MELEK: GCC 13+ no longer transitively includes cstdint
 #include <atomic>
 #include <deque>
 #include <limits>

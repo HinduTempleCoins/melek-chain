@@ -6,6 +6,8 @@
 // This file defines a collection of statistics collectors.
 #pragma once
 
+#include <cstdint>  // MELEK: GCC 13+ no longer transitively includes cstdint
+
 #include "rocksdb/table_properties.h"
 
 #include <memory>
