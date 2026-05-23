@@ -2812,6 +2812,39 @@ void database::init_genesis( uint64_t init_supply, uint64_t sbd_init_supply )
          } );
       }
 
+      // MELEK: pre-create the AI witness account (hathor) at genesis.
+      // Constitutional vote weight is NOT stored in witness_object::votes
+      // here — it is applied dynamically in update_witness_schedule4() and
+      // sps_processor::calculate_votes() during the founding window
+      // (head_block_num() < MELEK_AI_WITNESS_FOUNDING_WINDOW_END_BLOCK).
+      // This avoids needing a deduction at the cliff.
+      // Placeholder keys: using init_public_key. FIXME before mainnet —
+      // founding witnesses provide their own multisig owner/active keys.
+      // See CLAUDE.md "The AI witness — 12-month constitutional vote weight".
+      create< account_object >( [&]( account_object& a )
+      {
+         a.name = MELEK_AI_WITNESS_ACCOUNT_NAME;
+         a.memo_key = init_public_key;
+         a.balance = asset( 0, STEEM_SYMBOL );
+         a.sbd_balance = asset( 0, SBD_SYMBOL );
+      } );
+
+      create< account_authority_object >( [&]( account_authority_object& auth )
+      {
+         auth.account = MELEK_AI_WITNESS_ACCOUNT_NAME;
+         auth.owner.add_authority( init_public_key, 1 );
+         auth.owner.weight_threshold = 1;
+         auth.active  = auth.owner;
+         auth.posting = auth.active;
+      });
+
+      create< witness_object >( [&]( witness_object& w )
+      {
+         w.owner       = MELEK_AI_WITNESS_ACCOUNT_NAME;
+         w.signing_key = init_public_key;
+         w.schedule    = witness_object::elected;
+      } );
+
       create< dynamic_global_property_object >( [&]( dynamic_global_property_object& p )
       {
          p.current_witness = STEEM_INIT_MINER_NAME;

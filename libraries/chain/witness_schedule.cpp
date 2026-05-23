@@ -142,12 +142,32 @@ void update_witness_schedule4( database& db )
    flat_set< witness_id_type > selected_voted;
    selected_voted.reserve( wso.max_voted_witnesses );
 
+   // MELEK: during the 12-month founding window the AI witness (hathor) is
+   // guaranteed a top-21 slot to protect the chain-legibility layer from a
+   // stake coalition during the formative period. After head block crosses
+   // MELEK_AI_WITNESS_FOUNDING_WINDOW_END_BLOCK, this branch is dead and
+   // hathor competes via ordinary DPoS like every other witness.
+   // See CLAUDE.md "The AI witness — 12-month constitutional vote weight".
+   if( db.head_block_num() < MELEK_AI_WITNESS_FOUNDING_WINDOW_END_BLOCK )
+   {
+      const auto* ai_witness = db.find_witness( MELEK_AI_WITNESS_ACCOUNT_NAME );
+      if( ai_witness != nullptr && ai_witness->signing_key != public_key_type() )
+      {
+         selected_voted.insert( ai_witness->id );
+         active_witnesses.push_back( ai_witness->owner );
+         db.modify( *ai_witness, [&]( witness_object& wo ) { wo.schedule = witness_object::elected; } );
+      }
+   }
+
    const auto& widx = db.get_index<witness_index>().indices().get<by_vote_name>();
    for( auto itr = widx.begin();
         itr != widx.end() && selected_voted.size() < wso.max_voted_witnesses;
         ++itr )
    {
       if( db.has_hardfork( STEEM_HARDFORK_0_14__278 ) && (itr->signing_key == public_key_type()) )
+         continue;
+      // MELEK: skip if already injected as the AI-witness constitutional slot
+      if( selected_voted.find( itr->id ) != selected_voted.end() )
          continue;
       selected_voted.insert( itr->id );
       active_witnesses.push_back( itr->owner) ;

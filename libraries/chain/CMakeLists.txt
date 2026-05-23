@@ -52,6 +52,13 @@ endif( CLANG_TIDY_EXE )
 
 if(MSVC)
   set_source_files_properties( database.cpp PROPERTIES COMPILE_FLAGS "/bigobj" )
+else()
+  # MELEK: database.cpp instantiates massive chainbase/multi_index templates.
+  # On a 7.8 GB codespace, cc1plus OOM-kills compiling this file at -O3.
+  # Drop to -O0 just for this file. The chain consensus logic still works;
+  # it's only slower at runtime. Production builds on bigger Oracle VMs can
+  # restore -O3 by removing this override.
+  set_source_files_properties( database.cpp PROPERTIES COMPILE_FLAGS "-O0" )
 endif(MSVC)
 
 INSTALL( TARGETS

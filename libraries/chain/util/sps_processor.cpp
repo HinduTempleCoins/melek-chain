@@ -75,6 +75,18 @@ uint64_t sps_processor::calculate_votes( const proposal_id_type& id )
       {
          auto sum = _voter.witness_vote_weight();
          ret += sum.value;
+
+         // MELEK: during the 12-month founding window, add the AI witness's
+         // constitutional vote weight to any proposal it votes on. BLURT-regent
+         // parity — the same synthetic weight that protects the witness slot
+         // also applies to DAO proposal tallies. After the cliff this branch
+         // is dead and hathor's DAO votes count only by natural stake.
+         // See CLAUDE.md "The AI witness — 12-month constitutional vote weight".
+         if( found->voter == MELEK_AI_WITNESS_ACCOUNT_NAME
+             && db.head_block_num() < MELEK_AI_WITNESS_FOUNDING_WINDOW_END_BLOCK )
+         {
+            ret += static_cast<uint64_t>( MELEK_AI_WITNESS_CONSTITUTIONAL_VOTE_WEIGHT );
+         }
       }
 
       ++found;
