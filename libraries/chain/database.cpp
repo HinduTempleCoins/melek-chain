@@ -2132,9 +2132,9 @@ void database::process_funds()
        *
        * The unused 'feed' reference and pre-HF16 APR-percent logic from STEEM are gone.
        */
-      int64_t new_steem = ( head_block_num() <= STEEM_EMISSION_END_BLOCK )
-                          ? int64_t( STEEM_BLOCK_REWARD_AMOUNT )
-                          : int64_t( 0 );
+      share_type new_steem = ( head_block_num() <= STEEM_EMISSION_END_BLOCK )
+                             ? share_type( int64_t( STEEM_BLOCK_REWARD_AMOUNT ) )
+                             : share_type( int64_t( 0 ) );
 
       auto content_reward = ( new_steem * props.content_reward_percent ) / STEEM_100_PERCENT;
       if( has_hardfork( STEEM_HARDFORK_0_17__774 ) )
@@ -2264,7 +2264,9 @@ asset database::get_liquidity_reward()const
 asset database::get_content_reward()const
 {
    const auto& props = get_dynamic_global_properties();
-   static_assert( STEEM_BLOCK_INTERVAL == 3, "this code assumes a 3-second time interval" );
+   // MELEK: STEEM_BLOCK_INTERVAL == 3 assertion removed. This whole function is part
+   // of the pre-HF16 reward path which is unreachable on MELEK (all hardforks
+   // collapsed to genesis; process_funds uses our flat-emission rewrite).
    asset percent( protocol::calc_percent_reward_per_block< STEEM_CONTENT_APR_PERCENT >( props.virtual_supply.amount ), STEEM_SYMBOL );
    return std::max( percent, STEEM_MIN_CONTENT_REWARD );
 }
@@ -2272,7 +2274,7 @@ asset database::get_content_reward()const
 asset database::get_curation_reward()const
 {
    const auto& props = get_dynamic_global_properties();
-   static_assert( STEEM_BLOCK_INTERVAL == 3, "this code assumes a 3-second time interval" );
+   // MELEK: see get_content_reward — pre-HF16 path, unreachable on MELEK.
    asset percent( protocol::calc_percent_reward_per_block< STEEM_CURATE_APR_PERCENT >( props.virtual_supply.amount ), STEEM_SYMBOL);
    return std::max( percent, STEEM_MIN_CURATE_REWARD );
 }
@@ -2280,7 +2282,7 @@ asset database::get_curation_reward()const
 asset database::get_producer_reward()
 {
    const auto& props = get_dynamic_global_properties();
-   static_assert( STEEM_BLOCK_INTERVAL == 3, "this code assumes a 3-second time interval" );
+   // MELEK: see get_content_reward — pre-HF16 path, unreachable on MELEK.
    asset percent( protocol::calc_percent_reward_per_block< STEEM_PRODUCER_APR_PERCENT >( props.virtual_supply.amount ), STEEM_SYMBOL);
    auto pay = std::max( percent, STEEM_MIN_PRODUCER_REWARD );
    const auto& witness_account = get_account( props.current_witness );
@@ -2319,7 +2321,9 @@ asset database::get_pow_reward()const
       return asset( 0, STEEM_SYMBOL );
 #endif
 
-   static_assert( STEEM_BLOCK_INTERVAL == 3, "this code assumes a 3-second time interval" );
+   // MELEK: STEEM_BLOCK_INTERVAL assertion removed (we run 4s, not 3s).
+   // This is pre-HF16 PoW reward path; MELEK has no PoW phase so it's
+   // doubly unreachable.
    static_assert( STEEM_MAX_WITNESSES == 21, "this code assumes 21 per round" );
    asset percent( calc_percent_reward_per_round< STEEM_POW_APR_PERCENT >( props.virtual_supply.amount ), STEEM_SYMBOL);
    return std::max( percent, STEEM_MIN_POW_REWARD );
