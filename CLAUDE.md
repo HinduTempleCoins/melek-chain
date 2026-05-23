@@ -143,5 +143,5 @@ Strip BLURT branding; keep BLURT credit. Comments in source files and documentat
 
 - Content/witness/vesting reward split per block — default to BLURT-equivalent if needed to ship testnet; revisit before mainnet.
 - Chain ID seed string and address prefix — propose options when ready.
-- AI witness account name — **must be pinned before genesis** (constitutional vote-weight mechanism references it by name). Working placeholder until founding witnesses confirm: `melek.ai`.
+- AI witness account name: **`hathor`** (pinned). Graphene account names are lowercase only (`^[a-z][a-z0-9\-\.]{2,15}$`), so the on-chain identifier is the lowercase form regardless of how the name is rendered elsewhere. Chain code references this name in the witness-schedule computation and the DAO-vote tally during the 12-month founding window; it must match the account pre-created at genesis exactly.
 - Specific 5–15 MP delegation algorithm and the liquid-vs-MP mix — lives in the Bot repo's operator software, not in the chain code.
