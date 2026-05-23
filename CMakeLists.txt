@@ -248,8 +248,13 @@ if(ENABLE_COVERAGE_TESTING)
 endif()
 
 # fc/src/compress/miniz.c breaks strict aliasing. The Linux kernel builds with no strict aliasing
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-strict-aliasing -Werror -DBOOST_THREAD_DONT_PROVIDE_PROMISE_LAZY" )
-SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-strict-aliasing -Werror -DBOOST_THREAD_DONT_PROVIDE_PROMISE_LAZY" )
+# MELEK: removed -Werror to tolerate Steem-era code on modern toolchains
+# (GCC 13 alignment strictness in equihash, range-loop-construct warnings in
+# appbase, OpenSSL 3.x deprecations, etc.). Warnings are still emitted but
+# no longer abort the build. Re-enable per-target once individual files are
+# cleaned up.
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-strict-aliasing -DBOOST_THREAD_DONT_PROVIDE_PROMISE_LAZY" )
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-strict-aliasing -DBOOST_THREAD_DONT_PROVIDE_PROMISE_LAZY" )
 
 # external_plugins needs to be compiled first because libraries/app depends on STEEM_EXTERNAL_PLUGINS being fully populated
 add_subdirectory( external_plugins )

@@ -116,6 +116,24 @@
 #define STEEM_NUM_INIT_MINERS                 1
 #define STEEM_INIT_TIME                       (fc::time_point_sec());
 
+// MELEK: AI-witness 12-month constitutional vote weight (see CLAUDE.md
+// "The AI witness — 12-month constitutional vote weight (founding window)").
+// At genesis the AI witness account (MELEK_AI_WITNESS_ACCOUNT_NAME) holds
+// synthetic vote weight equal to the eventual total supply at the 270-year
+// cap. This weight is *not* counted toward circulating supply, inflation,
+// or the reward pool — it is a pure governance lever, applied to:
+//   1. witness-schedule computation (keeps the AI witness in top-21)
+//   2. DAO proposal tally (BLURT-regent parity)
+// The weight holds full strength until head_block_num() exceeds
+// MELEK_AI_WITNESS_FOUNDING_WINDOW_END_BLOCK, then drops to zero in one
+// step (no monthly decay). After the cliff, the AI witness competes for
+// top-21 via ordinary DPoS like every other witness.
+#define MELEK_AI_WITNESS_ACCOUNT_NAME                "hathor"
+#define MELEK_AI_WITNESS_FOUNDING_WINDOW_END_BLOCK   (STEEM_BLOCKS_PER_YEAR)  // = 7,884,000 at 4s blocks (~12 months)
+// Synthetic weight magnitude = block reward * blocks per year * 270 years
+// = total MELEK supply at cap. Matches BLURT-regent magnitude.
+#define MELEK_AI_WITNESS_CONSTITUTIONAL_VOTE_WEIGHT  (int64_t(STEEM_BLOCK_REWARD_AMOUNT) * int64_t(STEEM_BLOCKS_PER_YEAR) * int64_t(270))
+
 #define STEEM_MAX_WITNESSES                   21
 
 #define STEEM_MAX_VOTED_WITNESSES_HF0         19
