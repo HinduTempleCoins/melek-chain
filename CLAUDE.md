@@ -52,9 +52,19 @@ The AI witness operator software develops in three phases (this happens in the B
 
 ### 12-month constitutional vote weight (founding window)
 
-MELEK adapts BLURT's regent mechanism with a tighter cliff. At genesis, the AI witness account holds **constitutional vote weight equivalent to total MELEK supply at the 270-year cap** (~2.13 billion MELEK POWER, synthetic — not counted toward circulating supply, inflation, or the reward pool). The mechanism mirrors BLURT's regent: usable to vote for witnesses (including itself) and to vote on DAO proposals.
+MELEK adapts BLURT's regent mechanism with a tighter cliff and a narrower scope. At genesis, the AI witness account holds **constitutional vote weight equivalent to total MELEK supply at the 270-year cap** (~2.13 billion MELEK POWER, synthetic — not counted toward circulating supply, inflation, or the reward pool).
 
 The weight holds at **full strength for 12 months** — block 1 through `STEEM_BLOCKS_PER_YEAR = 7,884,000` at 4-second blocks — then drops to zero at a hard cliff. No monthly decay. Full power for one year, then nothing.
+
+**What the weight actually does (mechanism):** Two distinct effects, applied only while `head_block_num() < MELEK_AI_WITNESS_FOUNDING_WINDOW_END_BLOCK`:
+
+1. **Witness-schedule protection.** In `update_witness_schedule4()`, the AI witness account is explicitly reserved a top-21 slot before the by-vote-name iteration picks the rest. The constitutional weight is *not* applied to the AI witness's natural vote tally and does *not* let the AI witness elect other witnesses — it just keeps the AI witness's own slot occupied. After the cliff, the AI witness competes for top-21 via ordinary DPoS like every other witness.
+
+2. **DAO proposal weight.** In `sps_processor::calculate_votes()`, when the AI witness votes for a proposal, `MELEK_AI_WITNESS_CONSTITUTIONAL_VOTE_WEIGHT` is added to that proposal's tally in addition to the AI witness's natural witness_vote_weight (BLURT-regent parity for governance). After the cliff, only natural stake counts.
+
+This is narrower than BLURT's regent in one important way: BLURT's regent could *elect a slate* of any 21 witnesses with its weight. MELEK's AI witness protection only protects its own slot — it can't drag other accounts into the top-21 with the constitutional weight. The narrower scope matches the brief's intent ("AI residency, not AI dominance"): the goal is keeping the chain-legibility layer alive, not handing the AI-witness operator a year of governance dictatorship.
+
+**Implementation choice for consensus simplicity:** the founding-window protection lives in consensus code (compile-time constant + three guards) rather than as mutable chain-state fields like BLURT's `regent_vesting_shares`. Pro: smaller blast radius, no schema migration, no per-block decay-propagation, easier to audit. Con: the protection isn't surfaced as a queryable property on `dynamic_global_property`. Operators and block-explorer authors should rely on the documented end block (`7,884,000`) rather than expecting an on-chain countdown. Anyone running non-conforming software computes a different top-21 during the founding window and naturally forks themselves off the MELEK chain — which is fine: MELEK is designed to be forkable (see "The AI witness is forkable" above and the 270-year cap commitment).
 
 **The design tension acknowledged honestly:** this contradicts the earlier statement that "the chain code doesn't know its operator is an AI." For 12 months the chain *does* know one specific account name — the AI witness — and treats it differently in the witness-schedule computation and the DAO-vote tally. That divergence is bounded (one account, one mechanism, hard end date pinned at genesis) and chosen deliberately to protect MELEK's chain-legibility infrastructure from being voted off the chain by a stake coalition during the formative period before organic community attention is established.
 
