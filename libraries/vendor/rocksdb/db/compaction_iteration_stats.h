@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <cstdint>  // MELEK: required for uint64_t/int64_t on GCC 13+ (no longer transitively included)
+
 struct CompactionIterationStats {
   // Compaction statistics
 
