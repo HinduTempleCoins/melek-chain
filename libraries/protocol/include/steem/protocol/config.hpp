@@ -78,8 +78,19 @@
 // MELEK: lowered from Blurt default 3186477. Fresh chain -> tracking from block 1.
 #define STEEM_OWNER_AUTH_HISTORY_TRACKING_START_BLOCK_NUM 1
 
+// MELEK MAINNET: zero premine. No genesis allocation to any account.
+// CLAUDE.md "Genesis and supply": "No premine. Genesis creates no MELEK
+// in any account. Every MELEK in circulation must be earned through
+// block production, content rewards, or curation rewards after genesis."
+// Founding witnesses (Ryan Van Kush, Sohail, Prince, hathor) earn from
+// block 1 like any later-arriving witness. The 250M visible on testnet
+// builds (above) is a testnet-only convenience for testing transfers;
+// it does NOT exist on mainnet. The values below must stay 0 on mainnet —
+// changing them would silently reintroduce a premine.
 #define STEEM_INIT_SUPPLY                     int64_t(0)
 #define STEEM_SBD_INIT_SUPPLY                 int64_t(0)
+static_assert( STEEM_INIT_SUPPLY     == 0, "MELEK mainnet must have zero MELEK premine (see CLAUDE.md 'Genesis and supply')" );
+static_assert( STEEM_SBD_INIT_SUPPLY == 0, "MELEK mainnet must have zero SBD/MBD premine (single-token chain)" );
 
 #endif
 
