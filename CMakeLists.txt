@@ -253,7 +253,10 @@ endif()
 # appbase, OpenSSL 3.x deprecations, etc.). Warnings are still emitted but
 # no longer abort the build. Re-enable per-target once individual files are
 # cleaned up.
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-strict-aliasing -DBOOST_THREAD_DONT_PROVIDE_PROMISE_LAZY" )
+# Also tighten GCC's garbage-collection thresholds during template
+# instantiation — database.cpp's chainbase/multi_index templates OOM-killed
+# cc1plus on the 7.8 GB codespace without these. Slower compile, lower peak RAM.
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-strict-aliasing -DBOOST_THREAD_DONT_PROVIDE_PROMISE_LAZY --param ggc-min-expand=5 --param ggc-min-heapsize=32768" )
 SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-strict-aliasing -DBOOST_THREAD_DONT_PROVIDE_PROMISE_LAZY" )
 
 # external_plugins needs to be compiled first because libraries/app depends on STEEM_EXTERNAL_PLUGINS being fully populated
