@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <cstdint>  // MELEK: required for uint8_t/uint32_t on GCC 13+
 #include <string>
 #include <vector>
 
