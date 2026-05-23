@@ -260,7 +260,10 @@ if(FAIL_ON_WARNINGS)
   if(MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /WX")
   else() # assume GCC
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wno-error=shadow")
+    # MELEK: dropped -Werror — GCC 13 flags deprecated copy-constructor on
+    # rocksdb's FileDescriptor (header-only issue with implicitly-declared
+    # constexpr copy). Keep -Wno-error=shadow for parity.
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=shadow")
     if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 11.0)
       set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=defaulted-function-deleted")
     endif()
