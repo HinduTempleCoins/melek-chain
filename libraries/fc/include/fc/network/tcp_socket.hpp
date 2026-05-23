@@ -51,10 +51,16 @@ namespace fc {
     private:
       friend class tcp_server;
       class impl;
+      // MELEK: bumped both reservations to 0x200 (512 bytes). Boost 1.83's
+      // tcp_socket::impl grew past the original Steem-era reservations
+      // (0x81 Windows / 0x54 Linux), triggering fc::fwd's static_assert
+      // "Failed to reserve enough space in fc::fwd<T,S>". 512 bytes covers
+      // current Boost::asio internals with substantial headroom for future
+      // growth at negligible stack cost.
       #ifdef _WIN64
-      fc::fwd<impl,0x81> my;
+      fc::fwd<impl,0x200> my;
       #else
-      fc::fwd<impl,0x54> my;
+      fc::fwd<impl,0x200> my;
       #endif
   };
   typedef std::shared_ptr<tcp_socket> tcp_socket_ptr;
