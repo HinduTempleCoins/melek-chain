@@ -45,7 +45,10 @@
 
 #else // IS LIVE MELEK NETWORK (forked from STEEM/BLURT — see HinduTempleCoins/MELEK CLAUDE.md)
 
-#define STEEM_BLOCKCHAIN_VERSION              ( version(0, 22, 1) )
+// MELEK: 0.23.0 so the SMT hardfork (HF23) is active from genesis on mainnet,
+// matching the live testnet. Was 0.22.1, which left STEEM_NUM_HARDFORKS at 22
+// and would have silently disabled SMTs on the mainnet build.
+#define STEEM_BLOCKCHAIN_VERSION              ( version(0, 23, 0) )
 #define STEEM_NETWORK_TYPE                    "mainnet"
 
 // FIXME: Witness operator MUST replace before mainnet launch.
