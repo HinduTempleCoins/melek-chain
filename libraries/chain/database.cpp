@@ -2767,12 +2767,13 @@ void database::init_genesis( uint64_t init_supply, uint64_t sbd_init_supply )
          auth.active.weight_threshold = 1;
       });
 
-#ifdef IS_TEST_NET
+      // MELEK: the treasury account (melek.dao) must exist at genesis on BOTH nets — block
+      // application (sps_processor / sps_fund payout) does get_account(STEEM_TREASURY_ACCOUNT)
+      // from block 1. The `#ifdef IS_TEST_NET` guard left mainnet without it → block-1 crash.
       create< account_object >( [&]( account_object& a )
       {
          a.name = STEEM_TREASURY_ACCOUNT;
       } );
-#endif
 
       create< account_object >( [&]( account_object& a )
       {
@@ -4889,11 +4890,12 @@ void database::init_hardforks()
    FC_ASSERT( STEEM_HARDFORK_0_22 == 22, "Invalid hardfork configuration" );
    _hardfork_versions.times[ STEEM_HARDFORK_0_22 ] = fc::time_point_sec( STEEM_HARDFORK_0_22_TIME );
    _hardfork_versions.versions[ STEEM_HARDFORK_0_22 ] = STEEM_HARDFORK_0_22_VERSION;
-#ifdef IS_TEST_NET
+   // MELEK: HF 0.23 (SMT) is active at genesis on BOTH testnet AND mainnet (0_23.hf time=1).
+   // Removed the `#ifdef IS_TEST_NET` guard — STEEM_NUM_HARDFORKS==23 in both builds, so mainnet
+   // must also initialize versions[23] or init_hardforks asserts (hardfork_version(0.23) == 0).
    FC_ASSERT( STEEM_HARDFORK_0_23 == 23, "Invalid hardfork configuration" );
    _hardfork_versions.times[ STEEM_HARDFORK_0_23 ] = fc::time_point_sec( STEEM_HARDFORK_0_23_TIME );
    _hardfork_versions.versions[ STEEM_HARDFORK_0_23 ] = STEEM_HARDFORK_0_23_VERSION;
-#endif
 
 
    const auto& hardforks = get_hardfork_property_object();
