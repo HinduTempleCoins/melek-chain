@@ -3,13 +3,14 @@
  */
 #pragma once
 #include <steem/protocol/hardfork.hpp>
+#include <steem/protocol/melek_genesis_inscription.hpp>
 
 // WARNING!
 // Every symbol defined here needs to be handled appropriately in get_config.cpp
 // This is checked by get_config_check.sh called from Dockerfile
 
 #ifdef IS_TEST_NET
-#define STEEM_BLOCKCHAIN_VERSION              ( version(0, 23, 0) )
+#define STEEM_BLOCKCHAIN_VERSION              ( version(0, 24, 0) )
 #define STEEM_NETWORK_TYPE                    "testnet"
 
 #define STEEM_INIT_PRIVATE_KEY                (fc::ecc::private_key::regenerate(fc::sha256::hash(std::string("init_key"))))
@@ -48,7 +49,7 @@
 // MELEK: 0.23.0 so the SMT hardfork (HF23) is active from genesis on mainnet,
 // matching the live testnet. Was 0.22.1, which left STEEM_NUM_HARDFORKS at 22
 // and would have silently disabled SMTs on the mainnet build.
-#define STEEM_BLOCKCHAIN_VERSION              ( version(0, 23, 0) )
+#define STEEM_BLOCKCHAIN_VERSION              ( version(0, 24, 0) )
 #define STEEM_NETWORK_TYPE                    "mainnet"
 
 // FIXME: Witness operator MUST replace before mainnet launch.
@@ -56,13 +57,16 @@
 // in dev/testnet builds. Matching private key: regenerate(sha256::hash("melek_init_key")).
 #define STEEM_INIT_PRIVATE_KEY                (fc::ecc::private_key::regenerate(fc::sha256::hash(std::string("melek_init_key"))))
 #define STEEM_INIT_PUBLIC_KEY_STR             (std::string( steem::protocol::public_key_type(STEEM_INIT_PRIVATE_KEY.get_public_key()) ))
-#define STEEM_CHAIN_ID                        (fc::sha256::hash(std::string("melek-mainnet-v1-genesis")))
+// MELEK mainnet chain id = SHA-256 of the verified 255-byte genesis inscription. The inscription IS
+// the chain's cryptographic identity — a node with a different inscription is a different chain.
+#define STEEM_CHAIN_ID                        (fc::sha256::hash(std::string(MELEK_GENESIS_HEADLINE)))
 #define STEEM_ADDRESS_PREFIX                  "MELEK"
 
 // FIXME: Replace with actual launch UNIX timestamp before genesis block.
 // Placeholder: 2026-06-01 00:00:00 UTC.
-#define STEEM_GENESIS_TIME                    (fc::time_point_sec(1748736000))
-#define STEEM_MINING_TIME                     (fc::time_point_sec(1748736000))
+// MELEK GENESIS: 7:12 AM Central (CDT) on 7/12/2026 = 12:12:00 UTC = unix 1783858320. Block Zero.
+#define STEEM_GENESIS_TIME                    (fc::time_point_sec(1783858320))
+#define STEEM_MINING_TIME                     (fc::time_point_sec(1783858320))
 #define STEEM_CASHOUT_WINDOW_SECONDS_PRE_HF12 (60*60*24)    /// 1 day
 #define STEEM_CASHOUT_WINDOW_SECONDS_PRE_HF17 (60*60*12)    /// 12 hours
 #define STEEM_CASHOUT_WINDOW_SECONDS          (60*60*24*7)  /// 7 days
@@ -197,6 +201,13 @@ static_assert( STEEM_SBD_INIT_SUPPLY == 0, "MELEK mainnet must have zero SBD/MBD
 
 #define STEEM_CONTENT_REWARD_PERCENT_HF21     (65*STEEM_1_PERCENT)
 #define STEEM_PROPOSAL_FUND_PERCENT_HF21      (10*STEEM_1_PERCENT)
+
+// MELEK Move fork (HF24): 15% of block emission moves from the content(blog) pool into a chain-level
+// Move REWARD FUND (a reward_fund_object, exactly like the "post" blog pool — no account). content
+// 65 -> 50; the 15 points become MELEK_MOVE_FUND_PERCENT, credited to the "move" reward fund each block.
+#define STEEM_CONTENT_REWARD_PERCENT_HF24     (50*STEEM_1_PERCENT)
+#define MELEK_MOVE_FUND_PERCENT               (15*STEEM_1_PERCENT)
+#define STEEM_MOVE_REWARD_FUND_NAME           ("move")
 
 #define STEEM_HF21_CONVERGENT_LINEAR_RECENT_CLAIMS (fc::uint128_t(0,503600561838938636ull))
 #define STEEM_CONTENT_CONSTANT_HF21           (fc::uint128_t(0,2000000000000ull))

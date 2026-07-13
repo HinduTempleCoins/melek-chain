@@ -2141,7 +2141,13 @@ void database::process_funds()
          content_reward = pay_reward_funds( content_reward );
       auto vesting_reward = ( new_steem * props.vesting_reward_percent ) / STEEM_100_PERCENT;
       auto sps_fund = ( new_steem * props.sps_fund_percent ) / STEEM_100_PERCENT;
-      auto witness_reward = new_steem - content_reward - vesting_reward - sps_fund;
+      // MELEK Move fork (HF24): carve 15% of emission for the chain-level "move" reward fund.
+      // Taken out of the witness residual here; content drops 65->50 at the HF apply (below), so the
+      // net effect is "15% moves from bloggers to the Move fund" while vesting/sps/witness stay put.
+      share_type move_fund = has_hardfork( STEEM_HARDFORK_0_24 )
+                             ? ( new_steem * MELEK_MOVE_FUND_PERCENT ) / STEEM_100_PERCENT
+                             : share_type( 0 );
+      auto witness_reward = new_steem - content_reward - vesting_reward - sps_fund - move_fund;
 
       const auto& cwit = get_witness( props.current_witness );
       witness_reward *= STEEM_MAX_WITNESSES;
@@ -2162,6 +2168,15 @@ void database::process_funds()
       {
          adjust_balance( STEEM_TREASURY_ACCOUNT, asset( sps_fund, STEEM_SYMBOL ) );
       }
+      // MELEK Move fork (HF24): credit the chain-level Move reward fund directly from emission —
+      // a reward_fund_object like the "post" blog pool, NO account.
+      if( move_fund > 0 )
+      {
+         modify( get< reward_fund_object, by_name >( STEEM_MOVE_REWARD_FUND_NAME ), [&]( reward_fund_object& rfo )
+         {
+            rfo.reward_balance += asset( move_fund, STEEM_SYMBOL );
+         });
+      }
 
       new_steem = content_reward + vesting_reward + witness_reward;
 
@@ -2170,8 +2185,8 @@ void database::process_funds()
          p.total_vesting_fund_steem += asset( vesting_reward, STEEM_SYMBOL );
          if( !has_hardfork( STEEM_HARDFORK_0_17__774 ) )
             p.total_reward_fund_steem  += asset( content_reward, STEEM_SYMBOL );
-         p.current_supply      += asset( new_steem + sps_fund, STEEM_SYMBOL );
-         p.virtual_supply      += asset( new_steem + sps_fund, STEEM_SYMBOL );
+         p.current_supply      += asset( new_steem + sps_fund + move_fund, STEEM_SYMBOL );
+         p.virtual_supply      += asset( new_steem + sps_fund + move_fund, STEEM_SYMBOL );
       });
 
       operation vop = producer_reward_operation( cwit.owner, asset( 0, VESTS_SYMBOL ) );
@@ -4897,6 +4912,11 @@ void database::init_hardforks()
    _hardfork_versions.times[ STEEM_HARDFORK_0_23 ] = fc::time_point_sec( STEEM_HARDFORK_0_23_TIME );
    _hardfork_versions.versions[ STEEM_HARDFORK_0_23 ] = STEEM_HARDFORK_0_23_VERSION;
 
+   // MELEK HF24 (Move fork): scheduled activation (0_24.hf sets the time; mainnet future, testnet=1).
+   FC_ASSERT( STEEM_HARDFORK_0_24 == 24, "Invalid hardfork configuration" );
+   _hardfork_versions.times[ STEEM_HARDFORK_0_24 ] = fc::time_point_sec( STEEM_HARDFORK_0_24_TIME );
+   _hardfork_versions.versions[ STEEM_HARDFORK_0_24 ] = STEEM_HARDFORK_0_24_VERSION;
+
 
    const auto& hardforks = get_hardfork_property_object();
    FC_ASSERT( hardforks.last_hardfork <= STEEM_NUM_HARDFORKS, "Chain knows of more hardforks than configuration", ("hardforks.last_hardfork",hardforks.last_hardfork)("STEEM_NUM_HARDFORKS",STEEM_NUM_HARDFORKS) );
@@ -5315,6 +5335,35 @@ void database::apply_hardfork( uint32_t hardfork )
             gpo.target_votes_per_period = STEEM_VOTES_PER_PERIOD_SMT_HF;
          });
 
+         break;
+      }
+      case STEEM_HARDFORK_0_24:
+      {
+         // MELEK Move fork: shift 15% of block emission from the content(blog) pool to the Move pool.
+         modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
+         {
+            gpo.content_reward_percent = STEEM_CONTENT_REWARD_PERCENT_HF24;   // 65 -> 50
+         });
+
+         // Create the chain-level Move REWARD FUND — a reward_fund_object exactly like the "post"
+         // blog pool. NO account, no key, no signer. percent_content_rewards = 0 so pay_reward_funds
+         // never touches it; it is credited directly from emission in process_funds and distributed
+         // to walkers by move-weight.
+         auto* move_rf = find< reward_fund_object, by_name >( STEEM_MOVE_REWARD_FUND_NAME );
+         if( move_rf == nullptr )
+         {
+            create< reward_fund_object >( [&]( reward_fund_object& rfo )
+            {
+               rfo.name                     = STEEM_MOVE_REWARD_FUND_NAME;
+               rfo.last_update              = head_block_time();
+               rfo.content_constant         = STEEM_CONTENT_CONSTANT_HF21;
+               rfo.percent_curation_rewards = 0;
+               rfo.percent_content_rewards  = 0;   // fed directly from emission, not by pay_reward_funds
+               rfo.reward_balance           = asset( 0, STEEM_SYMBOL );
+               rfo.author_reward_curve      = convergent_linear;
+               rfo.curation_reward_curve    = convergent_square_root;
+            });
+         }
          break;
       }
       default:
