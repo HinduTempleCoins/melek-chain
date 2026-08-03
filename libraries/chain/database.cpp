@@ -162,6 +162,7 @@ void database::open( const open_args& args )
       _benchmark_dumper.set_enabled( args.benchmark_is_enabled );
 
       _block_log.open( args.data_dir / "block_log" );
+      _reversible_blocks_file = args.data_dir / "reversible_blocks.bin";
 
       auto log_head = _block_log.head();
 
@@ -198,6 +199,46 @@ void database::open( const open_args& args )
       {
          init_hardforks(); // Writes to local state, but reads from db
       });
+
+      // MELEK: resume at HEAD on a normal restart. open() above rewinds to LIB (undo_all) and
+      // _fork_db.start_block() at LIB; without this the node sits at LIB and must re-sync on every
+      // restart (and re-enabling production mid-catch-up forks). Replay the reversible (post-LIB)
+      // blocks close() persisted so the node comes back up exactly where it left off. Placed after
+      // init_hardforks so hardfork state is ready when the blocks are applied. Soft-fail: any error
+      // just leaves us at LIB as before. (reindex() has the same reload for the full-replay path.)
+      try
+      {
+         if( fc::exists( _reversible_blocks_file ) )
+         {
+            std::vector< signed_block > rev;
+            {
+               std::ifstream in( _reversible_blocks_file.generic_string().c_str(), std::ios::binary );
+               std::vector< char > buf( ( std::istreambuf_iterator< char >( in ) ), std::istreambuf_iterator< char >() );
+               if( !buf.empty() )
+                  fc::raw::unpack_from_vector( buf, rev );
+            }
+            with_write_lock( [&]()
+            {
+               uint32_t applied = 0;
+               const uint32_t reload_skip =
+                    skip_witness_signature | skip_transaction_signatures | skip_transaction_dupe_check
+                  | skip_block_size_check | skip_tapos_check | skip_authority_check | skip_undo_history_check
+                  | skip_witness_schedule_check | skip_validate | skip_validate_invariants;
+               for( const auto& b : rev )
+               {
+                  if( b.block_num() > head_block_num() )
+                  {
+                     push_block( b, reload_skip );
+                     ++applied;
+                  }
+               }
+               if( applied )
+                  ilog( "MELEK: restored ${n} reversible blocks on open; head now ${h}", ("n",applied)("h",head_block_num()) );
+            });
+         }
+      }
+      catch( const fc::exception& e ) { wlog( "MELEK: reversible-block reload skipped: ${e}", ("e", e.to_detail_string()) ); }
+      catch( ... ) { wlog( "MELEK: reversible-block reload skipped (unknown error)" ); }
 
       if (args.benchmark.first)
       {
@@ -343,6 +384,43 @@ uint32_t database::reindex( const open_args& args )
       if( _block_log.head()->block_num() )
          _fork_db.start_block( *_block_log.head() );
 
+      // MELEK: reload reversible (post-LIB) blocks persisted by close(). Without this a restart
+      // while LIB is frozen rewinds to LIB and must re-sync (and re-enabling production mid-catch-up
+      // forks). This resumes the node at HEAD. Soft-fail: any error just leaves us at LIB as before.
+      try
+      {
+         if( fc::exists( _reversible_blocks_file ) )
+         {
+            std::vector< signed_block > rev;
+            {
+               std::ifstream in( _reversible_blocks_file.generic_string().c_str(), std::ios::binary );
+               std::vector< char > buf( ( std::istreambuf_iterator< char >( in ) ), std::istreambuf_iterator< char >() );
+               if( !buf.empty() )
+                  fc::raw::unpack_from_vector( buf, rev );
+            }
+            with_write_lock( [&]()
+            {
+               uint32_t applied = 0;
+               const uint32_t reload_skip =
+                    skip_witness_signature | skip_transaction_signatures | skip_transaction_dupe_check
+                  | skip_block_size_check | skip_tapos_check | skip_authority_check | skip_undo_history_check
+                  | skip_witness_schedule_check | skip_validate | skip_validate_invariants;
+               for( const auto& b : rev )
+               {
+                  if( b.block_num() > head_block_num() )
+                  {
+                     push_block( b, reload_skip );
+                     ++applied;
+                  }
+               }
+               if( applied )
+                  ilog( "MELEK: restored ${n} reversible blocks on open; head now ${h}", ("n",applied)("h",head_block_num()) );
+            });
+         }
+      }
+      catch( const fc::exception& e ) { wlog( "MELEK: reversible-block reload skipped: ${e}", ("e", e.to_detail_string()) ); }
+      catch( ... ) { wlog( "MELEK: reversible-block reload skipped (unknown error)" ); }
+
 #ifdef ENABLE_MIRA
       if( args.replay_in_memory )
       {
@@ -381,6 +459,34 @@ void database::close(bool rewind)
       // we have to clear_pending() after we're done popping to get a clean
       // DB state (issue #336).
       clear_pending();
+
+      // MELEK: persist the reversible (post-LIB) main-branch blocks so open() can resume the node
+      // at HEAD instead of rewinding to the frozen LIB. Must run BEFORE the state DB / fork_db are
+      // torn down below. Soft-fail: a failure here just means a normal (rewind-to-LIB) restart.
+      try
+      {
+         if( !_reversible_blocks_file.string().empty() && _fork_db.head() )
+         {
+            // Read the range from the fork DB + block_log, NOT get_dynamic_global_properties():
+            // at close() the state DB is being torn down and the dgpo reads back as 0/0, so the old
+            // code persisted nothing. block_log head == last irreversible; fork_db head == current head.
+            const uint32_t lib = _block_log.head() ? _block_log.head()->block_num() : 0;
+            const uint32_t hb  = _fork_db.head()->data.block_num();
+            std::vector< signed_block > rev;
+            for( uint32_t n = lib + 1; n <= hb; ++n )
+            {
+               auto item = _fork_db.fetch_block_on_main_branch_by_number( n );
+               if( item ) rev.push_back( item->data );
+            }
+            std::vector< char > buf = fc::raw::pack_to_vector( rev );
+            std::ofstream out( _reversible_blocks_file.generic_string().c_str(), std::ios::binary | std::ios::trunc );
+            out.write( buf.data(), buf.size() );
+            out.close();
+            ilog( "MELEK: persisted ${n} reversible blocks (${a}..${b}) for resume-at-head",
+                  ("n",rev.size())("a",lib+1)("b",hb) );
+         }
+      }
+      catch( ... ) { wlog( "MELEK: reversible-block persist skipped" ); }
 
 #ifdef ENABLE_MIRA
       undo_all();
@@ -694,6 +800,17 @@ const time_point_sec database::calculate_discussion_payout_time( const comment_o
 
 const reward_fund_object& database::get_reward_fund( const comment_object& c ) const
 {
+   // MELEK move-to-earn: BETWEEN MELEK_MOVE_PAYOUT_TIME and MELEK_MOVE_ATTESTER_PAY_TIME, a top-level
+   // post in the "move" category was paid from the chain-level "move" reward fund (the old posts-based
+   // model). AT MELEK_MOVE_ATTESTER_PAY_TIME that model is SUPERSEDED — Move is walking, not blogging,
+   // and the "move" fund is drained only by the attester's move_pay op (see custom_json_evaluator).
+   // So after the attester gate we STOP routing "move" posts to the move fund; such posts fall through
+   // to the ordinary "post" fund like any other content. Time-gated => all nodes switch together.
+   if( head_block_time() >= fc::time_point_sec( MELEK_MOVE_PAYOUT_TIME )
+       && head_block_time() <  fc::time_point_sec( MELEK_MOVE_ATTESTER_PAY_TIME )
+       && to_string( c.parent_permlink ) == STEEM_MOVE_REWARD_FUND_NAME
+       && ( c.parent_author.size() == 0 ) )   // top-level post in the "move" category (legacy window only)
+      return get< reward_fund_object, by_name >( STEEM_MOVE_REWARD_FUND_NAME );
    return get< reward_fund_object, by_name >( STEEM_POST_REWARD_FUND_NAME );
 }
 
@@ -2189,14 +2306,24 @@ void database::process_funds()
          p.virtual_supply      += asset( new_steem + sps_fund + move_fund, STEEM_SYMBOL );
       });
 
-      operation vop = producer_reward_operation( cwit.owner, asset( 0, VESTS_SYMBOL ) );
-      create_vesting2( *this, get_account( cwit.owner ), asset( witness_reward, STEEM_SYMBOL ), false,
-         [&]( const asset& vesting_shares )
-         {
-            vop.get< producer_reward_operation >().vesting_shares = vesting_shares;
-            pre_push_virtual_operation( vop );
-         } );
-      post_push_virtual_operation( vop );
+      if( head_block_time() >= fc::time_point_sec( MELEK_LIQUID_MINING_TIME ) )
+      {
+         // MELEK: pay the block producer's reward as LIQUID MELEK (mined MELEK is spendable — the
+         // founding witness Hathor gives newcomers a share of what it mines). No vesting created.
+         adjust_balance( get_account( cwit.owner ), asset( witness_reward, STEEM_SYMBOL ) );
+         push_virtual_operation( producer_reward_operation( cwit.owner, asset( 0, VESTS_SYMBOL ) ) );
+      }
+      else
+      {
+         operation vop = producer_reward_operation( cwit.owner, asset( 0, VESTS_SYMBOL ) );
+         create_vesting2( *this, get_account( cwit.owner ), asset( witness_reward, STEEM_SYMBOL ), false,
+            [&]( const asset& vesting_shares )
+            {
+               vop.get< producer_reward_operation >().vesting_shares = vesting_shares;
+               pre_push_virtual_operation( vop );
+            } );
+         post_push_virtual_operation( vop );
+      }
    }
    else
    {
@@ -3197,6 +3324,19 @@ void database::_apply_block( const signed_block& next_block )
    clear_expired_transactions();
    clear_expired_orders();
    clear_expired_delegations();
+
+   // MELEK: one-shot reset of the post reward fund's recent_claims. MELEK launched at HF24 and inherited
+   // the Steem HF21 constant (~5.04e17, calibrated for Steem's stake), which divides every payout on this
+   // small chain (~1,200 VESTS) down to ~0. Reset it ONCE at a scheduled block to a MELEK-calibrated value
+   // so content rewards actually pay out; the 15-day decay self-tunes it from there. Block-gated so every
+   // node switches at the same block (consensus-safe); idempotent on replay/reorg (sets a fixed value).
+   if( next_block.block_num() == MELEK_RECENT_CLAIMS_RESET_BLOCK )
+   {
+      modify( get< reward_fund_object, by_name >( STEEM_POST_REWARD_FUND_NAME ), [&]( reward_fund_object& rfo )
+      {
+         rfo.recent_claims = MELEK_RECENT_CLAIMS_RESET_VALUE;
+      });
+   }
 
    if( next_block.block_num() % 100000 == 0 )
    {

@@ -163,6 +163,12 @@ static_assert( STEEM_SBD_INIT_SUPPLY == 0, "MELEK mainnet must have zero SBD/MBD
 #define STEEM_MAX_RUNNER_WITNESSES_HF17       1
 
 #define STEEM_HARDFORK_REQUIRED_WITNESSES     17 // 17 of the 21 dpos witnesses (20 elected and 1 virtual time) required for hardfork. This guarantees 75% participation on all subsequent rounds.
+// MELEK: 17 (sized for a 21-witness chain) exceeds MELEK's launch witness count (5), so the hardfork-vote
+// majority could never be reached and NO post-genesis hardfork (e.g. HF24) could ever activate. After
+// MELEK_HF_REQ_WITNESSES_FIX_TIME every node lowers the requirement together (time-gated => consensus-safe,
+// exactly like a hardfork) to a value sized for the small witness set.
+#define MELEK_HARDFORK_REQUIRED_WITNESSES     4          // 4 of 5 (matches finality's 4/5 supermajority)
+#define MELEK_HF_REQ_WITNESSES_FIX_TIME       1784260800 // 2026-07-17T04:00:00 UTC
 #define STEEM_MAX_TIME_UNTIL_EXPIRATION       (60*60) // seconds,  aka: 1 hour
 #define STEEM_MAX_MEMO_SIZE                   2048
 #define STEEM_MAX_PROXY_RECURSION_DEPTH       4
@@ -208,6 +214,44 @@ static_assert( STEEM_SBD_INIT_SUPPLY == 0, "MELEK mainnet must have zero SBD/MBD
 #define STEEM_CONTENT_REWARD_PERCENT_HF24     (50*STEEM_1_PERCENT)
 #define MELEK_MOVE_FUND_PERCENT               (15*STEEM_1_PERCENT)
 #define STEEM_MOVE_REWARD_FUND_NAME           ("move")
+// MELEK move-to-earn PAYOUT: after this time, a top-level post whose category ("move") matches the
+// move fund is paid from the "move" reward fund at cashout — exactly the way ordinary posts are paid
+// from the "post" fund. The chain credits the walker/author's reward-balance directly (they claim it
+// like any author); NO relay account holds or sends the pool (a relay would be a hack target). The
+// off-chain Move settlement posts each walker's epoch as a "move" post and realizes move-weight as
+// rshares via a move-attester's proportional vote. Time-gated => every node switches together
+// (consensus-safe), no new hardfork number needed.
+#define MELEK_MOVE_PAYOUT_TIME                1785038400  // 2026-07-26T04:00:00 UTC (aligned flip)
+// MELEK LIQUID MINING: after this time the block-producer reward is paid as LIQUID MELEK to the
+// witness (spendable), instead of vesting it. Mined MELEK is meant to be given away — the founding
+// witness (Hathor) grants newcomers a share of what it mines, which needs the reward to be liquid.
+// Time-gated => all nodes flip together (consensus-safe), no new hardfork number. Does NOT touch
+// STEEM_GENESIS_TIME (the July 12 launch date) — this is only a feature-activation flip.
+#define MELEK_LIQUID_MINING_TIME              1785038400  // 2026-07-26T04:00:00 UTC
+
+// MELEK MOVE ATTESTER PAYOUT ("HF25", a time-gated flip — no new hardfork number, same as the two
+// flips above). SUPERSEDES the post-based move payout (MELEK_MOVE_PAYOUT_TIME): Move is WALKING, not
+// blogging, so after this time the "move" reward fund is NOT paid via posts at all. Instead a single
+// staked attester broadcasts a custom_json (id "move_pay") for each CLOSED walk-epoch carrying that
+// hour's walk-weights [ ["account", weight], ... ]; the chain pays each walker their pro-rata slice of
+// a per-epoch CAP drawn from the "move" fund, straight to their liquid balance — no relay account, no
+// hathor transfer, no posts. The accumulated pool is a RESERVE; the cap (~slightly above the ~135
+// MELEK/hr inflow) keeps the first walkers from scooping it and slowly draws the reserve down. A
+// monotonic epoch guard on the dgpo (last_move_pay_epoch) blocks replay/reorder. Time-gated => every
+// node flips together (consensus-safe). The signer account + cap below are the two operator knobs.
+#define MELEK_MOVE_ATTESTER_PAY_TIME          1785817800              // 2026-08-04T04:30:00 UTC (11:30pm CDT Aug 3) — RE-CONFIRM before deploy; must be safely AFTER the rolling restart of all witnesses
+#define MELEK_MOVE_ATTESTER                   ("hathor")              // account whose ACTIVE authority must sign a move_pay op (swappable)
+#define MELEK_MOVE_EPOCH_PAY_CAP_AMOUNT       (int64_t( 150000 ))     // 150.000 MELEK max drawn per epoch (precision 3); inflow ~135/hr, so the small surplus slowly drains the reserve
+
+// MELEK RECENT_CLAIMS RESET: MELEK launched at HF24, so it inherited the Steem HF21 reset constant
+// STEEM_HF21_CONVERGENT_LINEAR_RECENT_CLAIMS (~5.04e17) — a value calibrated for Steem's billions of
+// VESTS. On MELEK (total stake ~1,200 VESTS) that figure divides every post payout down to ~0.00001
+// MELEK, so authors effectively earn nothing. This resets the post reward fund's recent_claims ONCE,
+// at an exact scheduled block, to a MELEK-calibrated value; the 15-day decay then self-tunes it.
+// Block-gated (exact block #) => every node applies it at the same block (consensus-safe) and it is
+// idempotent on replay/reorg (sets to a fixed value). Mirrors the HF17/19/21 recent_claims resets.
+#define MELEK_RECENT_CLAIMS_RESET_BLOCK       310000                                  // ~2.3 days after 2026-07-31 head (4s blocks); all 5 witnesses upgrade before this
+#define MELEK_RECENT_CLAIMS_RESET_VALUE       (fc::uint128_t(0,1000000000000ull))     // 1e12 — well-voted post ~0.4-0.9 MELEK; ~14 MELEK/cashout-batch vs 143k pool (no drain); tunable
 
 #define STEEM_HF21_CONVERGENT_LINEAR_RECENT_CLAIMS (fc::uint128_t(0,503600561838938636ull))
 #define STEEM_CONTENT_CONSTANT_HF21           (fc::uint128_t(0,2000000000000ull))

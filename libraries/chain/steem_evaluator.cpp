@@ -42,6 +42,7 @@ std::string wstring_to_utf8(const std::wstring& str)
 
 #include <fc/uint128.hpp>
 #include <fc/utf8.hpp>
+#include <fc/io/json.hpp>   // MELEK move_pay: parse the attester's walk-weight custom_json
 
 #include <limits>
 
@@ -1609,8 +1610,11 @@ void pre_hf20_vote_evaluator( const vote_operation& o, database& _db )
 
    if( _db.has_hardfork( STEEM_HARDFORK_0_20__1764 ) )
    {
-      abs_rshares -= STEEM_VOTE_DUST_THRESHOLD;
-      abs_rshares = std::max( int64_t(0), abs_rshares );
+      if( !_db.has_hardfork( STEEM_HARDFORK_0_24 ) )   // MELEK HF24: drop vote dust threshold so young-chain (low-stake) votes count
+      {
+         abs_rshares -= STEEM_VOTE_DUST_THRESHOLD;
+         abs_rshares = std::max( int64_t(0), abs_rshares );
+      }
    }
    else if( _db.has_hardfork( STEEM_HARDFORK_0_14__259 ) )
    {
@@ -2034,8 +2038,11 @@ void hf20_vote_evaluator( const vote_operation& o, database& _db )
 
    int64_t abs_rshares = used_mana.to_int64();
 
-   abs_rshares -= STEEM_VOTE_DUST_THRESHOLD;
-   abs_rshares = std::max( int64_t(0), abs_rshares );
+   if( !_db.has_hardfork( STEEM_HARDFORK_0_24 ) )   // MELEK HF24: drop vote dust threshold so young-chain (low-stake) votes count
+   {
+      abs_rshares -= STEEM_VOTE_DUST_THRESHOLD;
+      abs_rshares = std::max( int64_t(0), abs_rshares );
+   }
 
    uint32_t cashout_delta = ( comment.cashout_time - _db.head_block_time() ).to_seconds();
 
@@ -2384,8 +2391,11 @@ void generic_vote_evaluator(
 
    FC_TODO( "Determine if we should use the same dust threshold for SMTs or allow the creators to set it themselves" );
    auto consumed_rshares = abs_rshares;
-   abs_rshares -= STEEM_VOTE_DUST_THRESHOLD;
-   abs_rshares = std::max( int64_t(0), abs_rshares );
+   if( !_db.has_hardfork( STEEM_HARDFORK_0_24 ) )   // MELEK HF24: drop vote dust threshold so young-chain (low-stake) votes count
+   {
+      abs_rshares -= STEEM_VOTE_DUST_THRESHOLD;
+      abs_rshares = std::max( int64_t(0), abs_rshares );
+   }
 
    uint32_t cashout_delta = ( ctx.comment.cashout_time - _db.head_block_time() ).to_seconds();
 
@@ -2788,6 +2798,77 @@ void custom_json_evaluator::do_apply( const custom_json_operation& o )
       size_t num_auths = o.required_auths.size() + o.required_posting_auths.size();
       FC_ASSERT( num_auths <= STEEM_MAX_AUTHORITY_MEMBERSHIP,
          "Authority membership exceeded. Max: ${max} Current: ${n}", ("max", STEEM_MAX_AUTHORITY_MEMBERSHIP)("n", num_auths) );
+   }
+
+   // ── MELEK move-to-earn: attester walk-payout ("HF25" time-gated flip) ──────────────────────────
+   // Move is WALKING, not blogging. After MELEK_MOVE_ATTESTER_PAY_TIME the "move" reward fund is drained
+   // ONLY here: the single staked attester (MELEK_MOVE_ATTESTER) broadcasts a custom_json id "move_pay"
+   // for each CLOSED walk-epoch carrying that hour's walk-weights, and the chain pays each walker their
+   // pro-rata slice of a capped draw from the fund, straight to liquid balance. No posts, no relay, no
+   // hathor transfer. Consensus-safe: pure function of on-chain state + the (signed) op; time-gated so
+   // every node applies it identically. JSON shape:  { "epoch": <uint32>, "pay": [ ["acct", <weight> ], ... ] }
+   if( o.id == "move_pay" && _db.head_block_time() >= fc::time_point_sec( MELEK_MOVE_ATTESTER_PAY_TIME ) )
+   {
+      // 1) authority: must be signed by the designated attester's ACTIVE authority (required_auths),
+      //    never a posting key — this op moves value.
+      FC_ASSERT( o.required_auths.find( account_name_type( MELEK_MOVE_ATTESTER ) ) != o.required_auths.end(),
+         "move_pay must be signed by the move attester's active authority (${a})", ("a", std::string( MELEK_MOVE_ATTESTER )) );
+
+      // 2) parse the payload
+      fc::variant parsed = fc::json::from_string( o.json );
+      const fc::variant_object& body = parsed.get_object();
+      FC_ASSERT( body.contains( "epoch" ) && body.contains( "pay" ), "move_pay needs {epoch, pay[]}" );
+      uint32_t epoch = (uint32_t) body[ "epoch" ].as_uint64();
+      const fc::variants& rows = body[ "pay" ].get_array();
+
+      // 3) monotonic epoch guard — the same (or an earlier) hour can never be paid twice
+      const auto& dgpo = _db.get_dynamic_global_properties();
+      FC_ASSERT( epoch > dgpo.last_move_pay_epoch,
+         "move epoch ${e} already settled (last ${l})", ("e", epoch)("l", dgpo.last_move_pay_epoch) );
+
+      // 4) total weight (uint128 — many walkers × large weights)
+      fc::uint128_t total_weight( 0 );
+      for( const auto& row : rows )
+      {
+         const fc::variants& r = row.get_array();
+         if( r.size() >= 2 ) total_weight += fc::uint128_t( r[1].as_uint64() );
+      }
+
+      // 5) capped draw: pay out at most the per-epoch cap, bounded by what is actually in the fund.
+      const auto& move_fund = _db.get< reward_fund_object, by_name >( STEEM_MOVE_REWARD_FUND_NAME );
+      int64_t fund_amt = move_fund.reward_balance.amount.value;
+      int64_t draw = std::min< int64_t >( MELEK_MOVE_EPOCH_PAY_CAP_AMOUNT, fund_amt );
+
+      // 6) pay each walker their pro-rata slice; skip unknown/zero rows (never fail the whole batch on one)
+      int64_t paid = 0;
+      if( total_weight > fc::uint128_t( 0 ) && draw > 0 )
+      {
+         for( const auto& row : rows )
+         {
+            const fc::variants& r = row.get_array();
+            if( r.size() < 2 ) continue;
+            uint64_t w = r[1].as_uint64();
+            if( w == 0 ) continue;
+            account_name_type who( r[0].as_string() );
+            const account_object* acct = _db.find_account( who );
+            if( acct == nullptr ) continue;
+            int64_t amt = (int64_t)( ( fc::uint128_t( (uint64_t) draw ) * w ) / total_weight ).to_uint64();
+            if( amt <= 0 ) continue;
+            _db.adjust_balance( *acct, asset( amt, STEEM_SYMBOL ) );
+            paid += amt;
+         }
+      }
+
+      // 7) deduct exactly what was paid from the fund + advance the epoch guard
+      _db.modify( move_fund, [&]( reward_fund_object& rf ) {
+         rf.reward_balance -= asset( paid, STEEM_SYMBOL );
+         rf.last_update = _db.head_block_time();
+      });
+      _db.modify( dgpo, [&]( dynamic_global_property_object& gp ) {
+         gp.last_move_pay_epoch = epoch;
+      });
+
+      return;   // handled — do not fall through to the generic custom_json evaluator lookup
    }
 
    std::shared_ptr< custom_operation_interpreter > eval = d.get_custom_json_evaluator( o.id );
