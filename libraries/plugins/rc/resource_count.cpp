@@ -406,6 +406,14 @@ struct count_operation_visitor
    void operator()( const proposal_pay_operation& ) const {}
    void operator()( const sps_fund_operation& ) const {}
 
+   // MELEK native EVM ops (Route B) — RESERVED at HF 0.25. The count_operation_visitor
+   // enumerates every op with no template fallback, so these need explicit handlers to
+   // compile. P0 bodies are empty (the ops are HF-gated no-ops that reject at apply); the
+   // real gas->RC accounting (gas_limit * MELEK_RC_NS_PER_GAS + new-state bytes) lands in P3.
+   void operator()( const evm_deposit_operation& ) const {}
+   void operator()( const evm_withdraw_operation& ) const {}
+   void operator()( const evm_call_operation& ) const {}
+
    // Optional Actions
 #ifdef IS_TEST_NET
    void operator()( const example_optional_action& ) const {}
