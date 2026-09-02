@@ -1,6 +1,7 @@
 #pragma once
 
 #include <steem/protocol/steem_operations.hpp>
+#include <steem/protocol/evm_operations.hpp>
 
 #include <steem/chain/evaluator.hpp>
 
@@ -64,5 +65,11 @@ STEEM_DEFINE_EVALUATOR( smt_contribute )
 STEEM_DEFINE_EVALUATOR( create_proposal )
 STEEM_DEFINE_EVALUATOR( update_proposal_votes )
 STEEM_DEFINE_EVALUATOR( remove_proposal )
+
+// MELEK native EVM ops (Route B) — RESERVED at HF 0.25. HF-gated no-op bodies in P0
+// (see evm_evaluator.cpp); the evmone-backed bodies land in P1 behind these same tags.
+STEEM_DEFINE_EVALUATOR( evm_deposit )
+STEEM_DEFINE_EVALUATOR( evm_withdraw )
+STEEM_DEFINE_EVALUATOR( evm_call )
 
 } } // steem::chain

@@ -18,6 +18,9 @@ namespace steem { namespace protocol {
 #ifdef IS_TEST_NET
             ,example_required_action
 #endif
+            // MELEK EVM state-checkpoint action — RESERVED at HF 0.25 (appended last so it never
+            // shifts an existing tag). System-generated determinism tripwire; no-op body in P0.
+            ,evm_state_checkpoint_action
          > required_automated_action;
 
 } } // steem::protocol

@@ -19,4 +19,8 @@ STEEM_DEFINE_ACTION_EVALUATOR( smt_refund, required_automated_action )
 STEEM_DEFINE_ACTION_EVALUATOR( smt_contributor_payout, required_automated_action )
 STEEM_DEFINE_ACTION_EVALUATOR( smt_founder_payout, required_automated_action )
 
+// MELEK EVM state-checkpoint action — RESERVED at HF 0.25. No-op body in P0 (the plugin
+// never pushes it yet); P2 wires the recompute-and-equality-check determinism tripwire.
+STEEM_DEFINE_ACTION_EVALUATOR( evm_state_checkpoint, required_automated_action )
+
 } } //steem::chain

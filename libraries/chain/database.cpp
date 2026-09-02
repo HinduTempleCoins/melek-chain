@@ -2761,6 +2761,11 @@ void database::initialize_evaluators()
    _my->_evaluator_registry.register_evaluator< update_proposal_votes_evaluator          >();
    _my->_evaluator_registry.register_evaluator< remove_proposal_evaluator                >();
 
+   // MELEK native EVM ops (Route B) — RESERVED at HF 0.25, HF-gated no-op bodies (P0).
+   _my->_evaluator_registry.register_evaluator< evm_deposit_evaluator                    >();
+   _my->_evaluator_registry.register_evaluator< evm_withdraw_evaluator                   >();
+   _my->_evaluator_registry.register_evaluator< evm_call_evaluator                       >();
+
 
 #ifdef IS_TEST_NET
    _my->_req_action_evaluator_registry.register_evaluator< example_required_evaluator    >();
@@ -2774,6 +2779,9 @@ void database::initialize_evaluators()
    _my->_req_action_evaluator_registry.register_evaluator< smt_refund_evaluator             >();
    _my->_req_action_evaluator_registry.register_evaluator< smt_contributor_payout_evaluator >();
    _my->_req_action_evaluator_registry.register_evaluator< smt_founder_payout_evaluator     >();
+
+   // MELEK EVM state-checkpoint action — RESERVED at HF 0.25, no-op body (P0).
+   _my->_req_action_evaluator_registry.register_evaluator< evm_state_checkpoint_evaluator   >();
 
    _my->_opt_action_evaluator_registry.register_evaluator< smt_token_emission_evaluator     >();
 }
@@ -5057,6 +5065,15 @@ void database::init_hardforks()
    _hardfork_versions.times[ STEEM_HARDFORK_0_24 ] = fc::time_point_sec( STEEM_HARDFORK_0_24_TIME );
    _hardfork_versions.versions[ STEEM_HARDFORK_0_24 ] = STEEM_HARDFORK_0_24_VERSION;
 
+   // MELEK HF25 (native EVM surface freeze): reserves the evm_* op tags, the SPACE_ID-21 EVM
+   // state objects and the evm_state_checkpoint required-action. All bodies are HF-gated no-ops
+   // in P0 — the evmone-backed turn-on is a later plugin-internal / behavior change. Note: the
+   // "move attester payout" work colloquially called HF25 is a TIME gate that consumes no
+   // hardfork number, so 25 is the next free sequential slot in the ladder.
+   FC_ASSERT( STEEM_HARDFORK_0_25 == 25, "Invalid hardfork configuration" );
+   _hardfork_versions.times[ STEEM_HARDFORK_0_25 ] = fc::time_point_sec( STEEM_HARDFORK_0_25_TIME );
+   _hardfork_versions.versions[ STEEM_HARDFORK_0_25 ] = STEEM_HARDFORK_0_25_VERSION;
+
 
    const auto& hardforks = get_hardfork_property_object();
    FC_ASSERT( hardforks.last_hardfork <= STEEM_NUM_HARDFORKS, "Chain knows of more hardforks than configuration", ("hardforks.last_hardfork",hardforks.last_hardfork)("STEEM_NUM_HARDFORKS",STEEM_NUM_HARDFORKS) );
@@ -5504,6 +5521,14 @@ void database::apply_hardfork( uint32_t hardfork )
                rfo.curation_reward_curve    = convergent_square_root;
             });
          }
+         break;
+      }
+      case STEEM_HARDFORK_0_25:
+      {
+         // MELEK EVM surface freeze (HF25): no state migration. The evm_* op tags, the
+         // SPACE_ID-21 EVM state objects and the evm_state_checkpoint required-action are all
+         // reserved at compile time; turning the EVM ON is a later plugin/behavior change, so
+         // there is nothing to do on activation. Explicit no-op case (documented, not default).
          break;
       }
       default:
