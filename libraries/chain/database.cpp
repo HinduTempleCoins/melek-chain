@@ -5074,6 +5074,14 @@ void database::init_hardforks()
    _hardfork_versions.times[ STEEM_HARDFORK_0_25 ] = fc::time_point_sec( STEEM_HARDFORK_0_25_TIME );
    _hardfork_versions.versions[ STEEM_HARDFORK_0_25 ] = STEEM_HARDFORK_0_25_VERSION;
 
+   // MELEK HF26 ("no downvotes"): gates the negative-vote rejection in the vote/vote2 evaluators
+   // and retires the downvote mana pool (downvote_pool_percent -> 0). Scheduled activation
+   // (0_26.hf sets the time; mainnet future placeholder, testnet=1). versions[26] MUST be set
+   // here or the STEEM_BLOCKCHAIN_HARDFORK_VERSION == versions[NUM_HARDFORKS] sanity check fails.
+   FC_ASSERT( STEEM_HARDFORK_0_26 == 26, "Invalid hardfork configuration" );
+   _hardfork_versions.times[ STEEM_HARDFORK_0_26 ] = fc::time_point_sec( STEEM_HARDFORK_0_26_TIME );
+   _hardfork_versions.versions[ STEEM_HARDFORK_0_26 ] = STEEM_HARDFORK_0_26_VERSION;
+
 
    const auto& hardforks = get_hardfork_property_object();
    FC_ASSERT( hardforks.last_hardfork <= STEEM_NUM_HARDFORKS, "Chain knows of more hardforks than configuration", ("hardforks.last_hardfork",hardforks.last_hardfork)("STEEM_NUM_HARDFORKS",STEEM_NUM_HARDFORKS) );
@@ -5529,6 +5537,22 @@ void database::apply_hardfork( uint32_t hardfork )
          // SPACE_ID-21 EVM state objects and the evm_state_checkpoint required-action are all
          // reserved at compile time; turning the EVM ON is a later plugin/behavior change, so
          // there is nothing to do on activation. Explicit no-op case (documented, not default).
+         break;
+      }
+      case STEEM_HARDFORK_0_26:
+      {
+         // MELEK "no downvotes" fork (HF26). The negative-vote rejection is enforced in the
+         // vote/vote2 evaluators (gated on this hardfork). Here we retire the downvote MANA
+         // POOL so no further downvote mana is allocated: zero downvote_pool_percent. The
+         // existing negative-weight code paths in the evaluators are all guarded by
+         // `downvote_pool_percent != 0` (and, at/after HF26, are unreachable anyway because a
+         // negative vote is rejected first), so zeroing it is safe and avoids any divide-by
+         // downvote_pool_percent. account_object.downvote_manabar is left in place (dropping a
+         // serialized member is a separate state migration); it simply stops being replenished.
+         modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
+         {
+            gpo.downvote_pool_percent = 0;
+         });
          break;
       }
       default:

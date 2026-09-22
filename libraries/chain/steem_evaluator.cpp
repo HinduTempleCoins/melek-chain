@@ -2629,10 +2629,16 @@ void generic_vote_evaluator(
 void vote_evaluator::do_apply( const vote_operation& o )
 { try {
    FC_TODO( "Deprecate vote_operation in a future hardfork" );
-   // MELEK: no stake-weighted downvotes. Negative-weight votes are rejected
-   // at the evaluator. Spam/abuse is handled via flags + curation, not
-   // economic suppression. See CLAUDE.md "Moderation model: flags, no downvotes".
-   FC_ASSERT( o.weight >= 0, "Downvotes are not supported on MELEK. Spam and abuse are handled by community curation and front-end flags, not by stake-weighted economic suppression." );
+   // MELEK: no stake-weighted downvotes. Negative-weight votes are rejected at the
+   // evaluator. Spam/abuse is handled via flags + curation, not economic suppression.
+   // See CLAUDE.md "Moderation model: flags, no downvotes".
+   //
+   // GATED AT HF26 (do NOT make this unconditional): the live chain accepted downvotes
+   // before HF26, so pre-HF26 blocks may carry negative-weight votes. A from-genesis
+   // replay must apply those exactly as produced; only at/after HF26 is a negative vote
+   // rejected. Removing the gate would FC_ASSERT on historical blocks and halt sync.
+   if( _db.has_hardfork( STEEM_HARDFORK_0_26 ) )
+      FC_ASSERT( o.weight >= 0, "Downvotes are not supported on MELEK. Spam and abuse are handled by community curation and front-end flags, not by stake-weighted economic suppression." );
    if( _db.has_hardfork( STEEM_SMT_HARDFORK ) )
    {
       const auto& comment = _db.get_comment( o.author, o.permlink );
@@ -2706,7 +2712,11 @@ void vote2_evaluator::do_apply( const vote2_operation& o )
    {
       // MELEK: no stake-weighted downvotes. See [[vote_evaluator::do_apply]] above
       // and CLAUDE.md "Moderation model: flags, no downvotes".
-      FC_ASSERT( symbol_rshare.second >= 0, "Downvotes are not supported on MELEK. Spam and abuse are handled by community curation and front-end flags, not by stake-weighted economic suppression." );
+      // GATED AT HF26 for replay-safety (see vote_evaluator::do_apply). vote2 requires
+      // the SMT hardfork, but it can still appear in blocks produced before HF26, so the
+      // negative-rshares rejection must not fire on pre-HF26 history.
+      if( _db.has_hardfork( STEEM_HARDFORK_0_26 ) )
+         FC_ASSERT( symbol_rshare.second >= 0, "Downvotes are not supported on MELEK. Spam and abuse are handled by community curation and front-end flags, not by stake-weighted economic suppression." );
 
       ctx.rshares = symbol_rshare.second;
       ctx.symbol = symbol_rshare.first;

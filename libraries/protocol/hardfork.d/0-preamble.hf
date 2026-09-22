@@ -16,4 +16,5 @@
 // and mainnet must match or SMTs would be silently disabled there.
 // (Was: 23 under IS_TEST_NET, 22 otherwise.)
 // HF24 = Move fork. HF25 = native-EVM surface freeze (P0 reservation; bodies HF-gated no-ops).
-#define STEEM_NUM_HARDFORKS 25
+// HF26 = "no downvotes" — gates the negative-vote rejection + retires the downvote mana pool.
+#define STEEM_NUM_HARDFORKS 26
