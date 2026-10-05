@@ -13,6 +13,11 @@ void example_required_evaluator::do_apply( const example_required_action& a ) {}
 
 #endif
 
+// MELEK EVM state checkpoint (P0 reservation). No-op: the EVM plugin does not push this
+// action until P2. When wired, this recomputes the EVM roots over the block dirty set and
+// the surrounding process_required_actions equality-check rejects a divergent block.
+void evm_state_checkpoint_evaluator::do_apply( const evm_state_checkpoint_action& a ) {}
+
 void smt_ico_launch_evaluator::do_apply( const smt_ico_launch_action& a )
 {
    const smt_token_object& token = _db.get< smt_token_object, by_symbol >( a.symbol );

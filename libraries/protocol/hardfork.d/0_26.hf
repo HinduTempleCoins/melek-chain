@@ -1,0 +1,35 @@
+#ifndef STEEM_HARDFORK_0_26
+#define STEEM_HARDFORK_0_26 26
+
+// MELEK "no downvotes" fork (HF26). Turns the chain's already-declared moderation
+// posture (CLAUDE.md "Moderation model: flags, no downvotes"; BLURT-style) into an
+// actual, replay-safe consensus rule.
+//
+// WHY A HARDFORK, AND WHY GATED:
+//   The tree already carried two UNCONDITIONAL asserts rejecting negative-weight votes
+//   (steem_evaluator.cpp vote_evaluator / vote2_evaluator). Unconditional is wrong for a
+//   consensus rule: the live chain accepts downvotes today (HF24, downvote_pool_percent =
+//   STEEM_DOWNVOTE_POOL_PERCENT_HF21 = 2500, negative vote weight allowed), so any historical
+//   block that carries a negative-weight vote would FC_ASSERT during a from-genesis replay on
+//   the new binary and halt sync. Gating the rejection behind HF26 makes pre-HF26 blocks
+//   replay exactly as they were produced, and flips the rule for every upgraded node together
+//   at the HF26 block.
+//
+// WHAT HF26 DOES:
+//   * vote_operation / vote2_operation: negative weight (resp. negative rshares) is rejected
+//     ONLY at/after HF26 (see steem_evaluator.cpp). Upvotes and curation are untouched.
+//   * The downvote mana pool is retired: apply_hardfork(HF26) sets
+//     dynamic_global_property_object.downvote_pool_percent = 0 so no further downvote mana is
+//     allocated. The downvote_manabar field on account_object is left in place (removing a
+//     serialized member is a separate, heavier state migration); it simply stops being fed.
+//   * MBD/SBD is NOT touched here — it is already inert (supply 0, feed dead, interest 0) and
+//     removing the asset is a much larger, separate change. See the plan doc.
+#ifdef IS_TEST_NET
+#define STEEM_HARDFORK_0_26_TIME 1            // testnet/devnet: active immediately on the upgraded binary
+#else
+#define STEEM_HARDFORK_0_26_TIME 1924992000   // mainnet: PLACEHOLDER (2031-01-01 00:00 UTC). RE-CONFIRM a real coordinated activation window before any mainnet deploy.
+#endif
+
+#define STEEM_HARDFORK_0_26_VERSION hardfork_version( 0, 26 )
+
+#endif

@@ -148,6 +148,11 @@ namespace steem { namespace chain {
          uint16_t downvote_pool_percent = 0;
 
          asset smt_creation_fee = asset( 1000, SBD_SYMBOL );
+
+         // MELEK move-to-earn: the last walk-epoch (hour index) the attester has been paid for. A
+         // move_pay op must carry a STRICTLY GREATER epoch, so the same hour can never be paid twice
+         // (replay/reorg safe). 0 until the first move_pay after MELEK_MOVE_ATTESTER_PAY_TIME.
+         uint32_t last_move_pay_epoch = 0;
    };
 
    typedef multi_index_container<
@@ -211,5 +216,6 @@ FC_REFLECT( steem::chain::dynamic_global_property_object,
              (sps_interval_ledger)
              (downvote_pool_percent)
              (smt_creation_fee)
+             (last_move_pay_epoch)
           )
 CHAINBASE_SET_INDEX_TYPE( steem::chain::dynamic_global_property_object, steem::chain::dynamic_global_property_index )

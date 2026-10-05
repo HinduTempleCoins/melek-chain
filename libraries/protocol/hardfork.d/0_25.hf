@@ -1,0 +1,25 @@
+#ifndef STEEM_HARDFORK_0_25
+#define STEEM_HARDFORK_0_25 25
+
+// MELEK native-EVM surface freeze (HF25). Reserves the consensus surface for an embedded EVM
+// so the eventual turn-on is a plugin/behavior change, not a state migration:
+//   * native evm_deposit / evm_withdraw / evm_call op tags (operations.hpp)
+//   * SPACE_ID-21 EVM state objects (evm plugin: evm_account / evm_storage / evm_code)
+//   * evm_state_checkpoint required-action (determinism tripwire)
+// In P0 every body is a NO-OP (the op evaluators FC_ASSERT-reject; the checkpoint is never
+// pushed). ZERO evmone dependency. The evmone-backed bodies land in P1 behind these same tags.
+//
+// NOTE ON NUMBERING: the "move attester payout" work colloquially called HF25 is gated by a
+// TIME constant (MELEK_MOVE_ATTESTER_PAY_TIME), not a numbered hardfork — it consumes no slot
+// in this ladder. The tree tops at STEEM_HARDFORK_0_24, so 25 is the next free sequential
+// number. (Agent-1 recon suggested 0_26; that would leave a broken gap at 25 because
+// process_hardforks applies numbers sequentially.)
+#ifdef IS_TEST_NET
+#define STEEM_HARDFORK_0_25_TIME 1            // testnet/devnet: active immediately on the upgraded binary
+#else
+#define STEEM_HARDFORK_0_25_TIME 1924992000   // mainnet: 2031-01-01 00:00 UTC — FIXME placeholder, RE-CONFIRM before any mainnet deploy
+#endif
+
+#define STEEM_HARDFORK_0_25_VERSION hardfork_version( 0, 25 )
+
+#endif

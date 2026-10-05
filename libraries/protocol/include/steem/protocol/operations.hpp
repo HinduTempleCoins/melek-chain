@@ -7,6 +7,7 @@
 #include <steem/protocol/steem_virtual_operations.hpp>
 #include <steem/protocol/smt_operations.hpp>
 #include <steem/protocol/sps_operations.hpp>
+#include <steem/protocol/evm_operations.hpp>
 
 namespace steem { namespace protocol {
 
@@ -82,6 +83,13 @@ namespace steem { namespace protocol {
             smt_set_runtime_parameters_operation,
             smt_create_operation,
             smt_contribute_operation,
+
+            // MELEK native EVM ops (Route B) — RESERVED at HF 0.25, HF-gated no-op until P5.
+            // Appended AFTER the last non-virtual op and BEFORE the virtual marker; these tag
+            // ordinals are consensus-frozen forever. Do NOT reorder or remove.
+            evm_deposit_operation,
+            evm_withdraw_operation,
+            evm_call_operation,
 
             /// virtual operations below this point
             fill_convert_request_operation,

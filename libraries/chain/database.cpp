@@ -162,6 +162,7 @@ void database::open( const open_args& args )
       _benchmark_dumper.set_enabled( args.benchmark_is_enabled );
 
       _block_log.open( args.data_dir / "block_log" );
+      _reversible_blocks_file = args.data_dir / "reversible_blocks.bin";
 
       auto log_head = _block_log.head();
 
@@ -198,6 +199,46 @@ void database::open( const open_args& args )
       {
          init_hardforks(); // Writes to local state, but reads from db
       });
+
+      // MELEK: resume at HEAD on a normal restart. open() above rewinds to LIB (undo_all) and
+      // _fork_db.start_block() at LIB; without this the node sits at LIB and must re-sync on every
+      // restart (and re-enabling production mid-catch-up forks). Replay the reversible (post-LIB)
+      // blocks close() persisted so the node comes back up exactly where it left off. Placed after
+      // init_hardforks so hardfork state is ready when the blocks are applied. Soft-fail: any error
+      // just leaves us at LIB as before. (reindex() has the same reload for the full-replay path.)
+      try
+      {
+         if( fc::exists( _reversible_blocks_file ) )
+         {
+            std::vector< signed_block > rev;
+            {
+               std::ifstream in( _reversible_blocks_file.generic_string().c_str(), std::ios::binary );
+               std::vector< char > buf( ( std::istreambuf_iterator< char >( in ) ), std::istreambuf_iterator< char >() );
+               if( !buf.empty() )
+                  fc::raw::unpack_from_vector( buf, rev );
+            }
+            with_write_lock( [&]()
+            {
+               uint32_t applied = 0;
+               const uint32_t reload_skip =
+                    skip_witness_signature | skip_transaction_signatures | skip_transaction_dupe_check
+                  | skip_block_size_check | skip_tapos_check | skip_authority_check | skip_undo_history_check
+                  | skip_witness_schedule_check | skip_validate | skip_validate_invariants;
+               for( const auto& b : rev )
+               {
+                  if( b.block_num() > head_block_num() )
+                  {
+                     push_block( b, reload_skip );
+                     ++applied;
+                  }
+               }
+               if( applied )
+                  ilog( "MELEK: restored ${n} reversible blocks on open; head now ${h}", ("n",applied)("h",head_block_num()) );
+            });
+         }
+      }
+      catch( const fc::exception& e ) { wlog( "MELEK: reversible-block reload skipped: ${e}", ("e", e.to_detail_string()) ); }
+      catch( ... ) { wlog( "MELEK: reversible-block reload skipped (unknown error)" ); }
 
       if (args.benchmark.first)
       {
@@ -343,6 +384,43 @@ uint32_t database::reindex( const open_args& args )
       if( _block_log.head()->block_num() )
          _fork_db.start_block( *_block_log.head() );
 
+      // MELEK: reload reversible (post-LIB) blocks persisted by close(). Without this a restart
+      // while LIB is frozen rewinds to LIB and must re-sync (and re-enabling production mid-catch-up
+      // forks). This resumes the node at HEAD. Soft-fail: any error just leaves us at LIB as before.
+      try
+      {
+         if( fc::exists( _reversible_blocks_file ) )
+         {
+            std::vector< signed_block > rev;
+            {
+               std::ifstream in( _reversible_blocks_file.generic_string().c_str(), std::ios::binary );
+               std::vector< char > buf( ( std::istreambuf_iterator< char >( in ) ), std::istreambuf_iterator< char >() );
+               if( !buf.empty() )
+                  fc::raw::unpack_from_vector( buf, rev );
+            }
+            with_write_lock( [&]()
+            {
+               uint32_t applied = 0;
+               const uint32_t reload_skip =
+                    skip_witness_signature | skip_transaction_signatures | skip_transaction_dupe_check
+                  | skip_block_size_check | skip_tapos_check | skip_authority_check | skip_undo_history_check
+                  | skip_witness_schedule_check | skip_validate | skip_validate_invariants;
+               for( const auto& b : rev )
+               {
+                  if( b.block_num() > head_block_num() )
+                  {
+                     push_block( b, reload_skip );
+                     ++applied;
+                  }
+               }
+               if( applied )
+                  ilog( "MELEK: restored ${n} reversible blocks on open; head now ${h}", ("n",applied)("h",head_block_num()) );
+            });
+         }
+      }
+      catch( const fc::exception& e ) { wlog( "MELEK: reversible-block reload skipped: ${e}", ("e", e.to_detail_string()) ); }
+      catch( ... ) { wlog( "MELEK: reversible-block reload skipped (unknown error)" ); }
+
 #ifdef ENABLE_MIRA
       if( args.replay_in_memory )
       {
@@ -381,6 +459,34 @@ void database::close(bool rewind)
       // we have to clear_pending() after we're done popping to get a clean
       // DB state (issue #336).
       clear_pending();
+
+      // MELEK: persist the reversible (post-LIB) main-branch blocks so open() can resume the node
+      // at HEAD instead of rewinding to the frozen LIB. Must run BEFORE the state DB / fork_db are
+      // torn down below. Soft-fail: a failure here just means a normal (rewind-to-LIB) restart.
+      try
+      {
+         if( !_reversible_blocks_file.string().empty() && _fork_db.head() )
+         {
+            // Read the range from the fork DB + block_log, NOT get_dynamic_global_properties():
+            // at close() the state DB is being torn down and the dgpo reads back as 0/0, so the old
+            // code persisted nothing. block_log head == last irreversible; fork_db head == current head.
+            const uint32_t lib = _block_log.head() ? _block_log.head()->block_num() : 0;
+            const uint32_t hb  = _fork_db.head()->data.block_num();
+            std::vector< signed_block > rev;
+            for( uint32_t n = lib + 1; n <= hb; ++n )
+            {
+               auto item = _fork_db.fetch_block_on_main_branch_by_number( n );
+               if( item ) rev.push_back( item->data );
+            }
+            std::vector< char > buf = fc::raw::pack_to_vector( rev );
+            std::ofstream out( _reversible_blocks_file.generic_string().c_str(), std::ios::binary | std::ios::trunc );
+            out.write( buf.data(), buf.size() );
+            out.close();
+            ilog( "MELEK: persisted ${n} reversible blocks (${a}..${b}) for resume-at-head",
+                  ("n",rev.size())("a",lib+1)("b",hb) );
+         }
+      }
+      catch( ... ) { wlog( "MELEK: reversible-block persist skipped" ); }
 
 #ifdef ENABLE_MIRA
       undo_all();
@@ -694,6 +800,17 @@ const time_point_sec database::calculate_discussion_payout_time( const comment_o
 
 const reward_fund_object& database::get_reward_fund( const comment_object& c ) const
 {
+   // MELEK move-to-earn: BETWEEN MELEK_MOVE_PAYOUT_TIME and MELEK_MOVE_ATTESTER_PAY_TIME, a top-level
+   // post in the "move" category was paid from the chain-level "move" reward fund (the old posts-based
+   // model). AT MELEK_MOVE_ATTESTER_PAY_TIME that model is SUPERSEDED — Move is walking, not blogging,
+   // and the "move" fund is drained only by the attester's move_pay op (see custom_json_evaluator).
+   // So after the attester gate we STOP routing "move" posts to the move fund; such posts fall through
+   // to the ordinary "post" fund like any other content. Time-gated => all nodes switch together.
+   if( head_block_time() >= fc::time_point_sec( MELEK_MOVE_PAYOUT_TIME )
+       && head_block_time() <  fc::time_point_sec( MELEK_MOVE_ATTESTER_PAY_TIME )
+       && to_string( c.parent_permlink ) == STEEM_MOVE_REWARD_FUND_NAME
+       && ( c.parent_author.size() == 0 ) )   // top-level post in the "move" category (legacy window only)
+      return get< reward_fund_object, by_name >( STEEM_MOVE_REWARD_FUND_NAME );
    return get< reward_fund_object, by_name >( STEEM_POST_REWARD_FUND_NAME );
 }
 
@@ -1813,13 +1930,34 @@ share_type database::cashout_comment_helper( util::comment_reward_context& ctx, 
 
          uint64_t reward = util::get_rshare_reward( ctx );
 
-         // If it is payout dust
-         if( util::to_sbd( current_steem_price, asset( reward, STEEM_SYMBOL ) ) < STEEM_MIN_PAYOUT_SBD )
-            reward = 0;
+         // MELEK HF27 — content & curation rewards fix. See hardfork.d/0_27.hf for the full
+         // write-up. Both guards below convert through the MBD median feed, and
+         // util::to_sbd()/util::to_steem() return ZERO when that price is null. On MELEK the feed
+         // is permanently null (STEEM_MIN_FEEDS == STEEM_MAX_WITNESSES/3 == 7 but the chain has 5
+         // witnesses, so update_median_feed can never reach the quorum), which zeroed every author
+         // and curation payout from genesis onward — twice over, since max_steem also collapsed to
+         // 0. This chain has no MBD by design, so the MBD-denominated dust check and the
+         // MBD-denominated max_accepted_payout clamp are both meaningless here.
+         //
+         // Pre-HF27 blocks keep the old behaviour so a from-genesis replay reproduces the zero
+         // payouts that actually happened.
+         if( has_hardfork( STEEM_HARDFORK_0_27 ) && current_steem_price.is_null() )
+         {
+            // The one piece of that logic that still means something without a price: an author
+            // who set max_accepted_payout to 0 is explicitly declining payout. Honour it.
+            if( comment.max_accepted_payout.amount.value == 0 )
+               reward = 0;
+         }
+         else
+         {
+            // If it is payout dust
+            if( util::to_sbd( current_steem_price, asset( reward, STEEM_SYMBOL ) ) < STEEM_MIN_PAYOUT_SBD )
+               reward = 0;
 
-         uint64_t max_steem = util::to_steem( current_steem_price, comment.max_accepted_payout ).amount.value;
+            uint64_t max_steem = util::to_steem( current_steem_price, comment.max_accepted_payout ).amount.value;
 
-         reward = std::min( reward, max_steem );
+            reward = std::min( reward, max_steem );
+         }
 
          uint128_t reward_tokens = uint128_t( reward );
 
@@ -2141,7 +2279,13 @@ void database::process_funds()
          content_reward = pay_reward_funds( content_reward );
       auto vesting_reward = ( new_steem * props.vesting_reward_percent ) / STEEM_100_PERCENT;
       auto sps_fund = ( new_steem * props.sps_fund_percent ) / STEEM_100_PERCENT;
-      auto witness_reward = new_steem - content_reward - vesting_reward - sps_fund;
+      // MELEK Move fork (HF24): carve 15% of emission for the chain-level "move" reward fund.
+      // Taken out of the witness residual here; content drops 65->50 at the HF apply (below), so the
+      // net effect is "15% moves from bloggers to the Move fund" while vesting/sps/witness stay put.
+      share_type move_fund = has_hardfork( STEEM_HARDFORK_0_24 )
+                             ? ( new_steem * MELEK_MOVE_FUND_PERCENT ) / STEEM_100_PERCENT
+                             : share_type( 0 );
+      auto witness_reward = new_steem - content_reward - vesting_reward - sps_fund - move_fund;
 
       const auto& cwit = get_witness( props.current_witness );
       witness_reward *= STEEM_MAX_WITNESSES;
@@ -2162,6 +2306,15 @@ void database::process_funds()
       {
          adjust_balance( STEEM_TREASURY_ACCOUNT, asset( sps_fund, STEEM_SYMBOL ) );
       }
+      // MELEK Move fork (HF24): credit the chain-level Move reward fund directly from emission —
+      // a reward_fund_object like the "post" blog pool, NO account.
+      if( move_fund > 0 )
+      {
+         modify( get< reward_fund_object, by_name >( STEEM_MOVE_REWARD_FUND_NAME ), [&]( reward_fund_object& rfo )
+         {
+            rfo.reward_balance += asset( move_fund, STEEM_SYMBOL );
+         });
+      }
 
       new_steem = content_reward + vesting_reward + witness_reward;
 
@@ -2170,18 +2323,28 @@ void database::process_funds()
          p.total_vesting_fund_steem += asset( vesting_reward, STEEM_SYMBOL );
          if( !has_hardfork( STEEM_HARDFORK_0_17__774 ) )
             p.total_reward_fund_steem  += asset( content_reward, STEEM_SYMBOL );
-         p.current_supply      += asset( new_steem + sps_fund, STEEM_SYMBOL );
-         p.virtual_supply      += asset( new_steem + sps_fund, STEEM_SYMBOL );
+         p.current_supply      += asset( new_steem + sps_fund + move_fund, STEEM_SYMBOL );
+         p.virtual_supply      += asset( new_steem + sps_fund + move_fund, STEEM_SYMBOL );
       });
 
-      operation vop = producer_reward_operation( cwit.owner, asset( 0, VESTS_SYMBOL ) );
-      create_vesting2( *this, get_account( cwit.owner ), asset( witness_reward, STEEM_SYMBOL ), false,
-         [&]( const asset& vesting_shares )
-         {
-            vop.get< producer_reward_operation >().vesting_shares = vesting_shares;
-            pre_push_virtual_operation( vop );
-         } );
-      post_push_virtual_operation( vop );
+      if( head_block_time() >= fc::time_point_sec( MELEK_LIQUID_MINING_TIME ) )
+      {
+         // MELEK: pay the block producer's reward as LIQUID MELEK (mined MELEK is spendable — the
+         // founding witness Hathor gives newcomers a share of what it mines). No vesting created.
+         adjust_balance( get_account( cwit.owner ), asset( witness_reward, STEEM_SYMBOL ) );
+         push_virtual_operation( producer_reward_operation( cwit.owner, asset( 0, VESTS_SYMBOL ) ) );
+      }
+      else
+      {
+         operation vop = producer_reward_operation( cwit.owner, asset( 0, VESTS_SYMBOL ) );
+         create_vesting2( *this, get_account( cwit.owner ), asset( witness_reward, STEEM_SYMBOL ), false,
+            [&]( const asset& vesting_shares )
+            {
+               vop.get< producer_reward_operation >().vesting_shares = vesting_shares;
+               pre_push_virtual_operation( vop );
+            } );
+         post_push_virtual_operation( vop );
+      }
    }
    else
    {
@@ -2619,6 +2782,11 @@ void database::initialize_evaluators()
    _my->_evaluator_registry.register_evaluator< update_proposal_votes_evaluator          >();
    _my->_evaluator_registry.register_evaluator< remove_proposal_evaluator                >();
 
+   // MELEK native EVM ops (Route B) — RESERVED at HF 0.25, HF-gated no-op bodies (P0).
+   _my->_evaluator_registry.register_evaluator< evm_deposit_evaluator                    >();
+   _my->_evaluator_registry.register_evaluator< evm_withdraw_evaluator                   >();
+   _my->_evaluator_registry.register_evaluator< evm_call_evaluator                       >();
+
 
 #ifdef IS_TEST_NET
    _my->_req_action_evaluator_registry.register_evaluator< example_required_evaluator    >();
@@ -2632,6 +2800,9 @@ void database::initialize_evaluators()
    _my->_req_action_evaluator_registry.register_evaluator< smt_refund_evaluator             >();
    _my->_req_action_evaluator_registry.register_evaluator< smt_contributor_payout_evaluator >();
    _my->_req_action_evaluator_registry.register_evaluator< smt_founder_payout_evaluator     >();
+
+   // MELEK EVM state-checkpoint action — RESERVED at HF 0.25, no-op body (P0).
+   _my->_req_action_evaluator_registry.register_evaluator< evm_state_checkpoint_evaluator   >();
 
    _my->_opt_action_evaluator_registry.register_evaluator< smt_token_emission_evaluator     >();
 }
@@ -2767,12 +2938,13 @@ void database::init_genesis( uint64_t init_supply, uint64_t sbd_init_supply )
          auth.active.weight_threshold = 1;
       });
 
-#ifdef IS_TEST_NET
+      // MELEK: the treasury account (melek.dao) must exist at genesis on BOTH nets — block
+      // application (sps_processor / sps_fund payout) does get_account(STEEM_TREASURY_ACCOUNT)
+      // from block 1. The `#ifdef IS_TEST_NET` guard left mainnet without it → block-1 crash.
       create< account_object >( [&]( account_object& a )
       {
          a.name = STEEM_TREASURY_ACCOUNT;
       } );
-#endif
 
       create< account_object >( [&]( account_object& a )
       {
@@ -3181,6 +3353,19 @@ void database::_apply_block( const signed_block& next_block )
    clear_expired_transactions();
    clear_expired_orders();
    clear_expired_delegations();
+
+   // MELEK: one-shot reset of the post reward fund's recent_claims. MELEK launched at HF24 and inherited
+   // the Steem HF21 constant (~5.04e17, calibrated for Steem's stake), which divides every payout on this
+   // small chain (~1,200 VESTS) down to ~0. Reset it ONCE at a scheduled block to a MELEK-calibrated value
+   // so content rewards actually pay out; the 15-day decay self-tunes it from there. Block-gated so every
+   // node switches at the same block (consensus-safe); idempotent on replay/reorg (sets a fixed value).
+   if( next_block.block_num() == MELEK_RECENT_CLAIMS_RESET_BLOCK )
+   {
+      modify( get< reward_fund_object, by_name >( STEEM_POST_REWARD_FUND_NAME ), [&]( reward_fund_object& rfo )
+      {
+         rfo.recent_claims = MELEK_RECENT_CLAIMS_RESET_VALUE;
+      });
+   }
 
    if( next_block.block_num() % 100000 == 0 )
    {
@@ -4889,11 +5074,42 @@ void database::init_hardforks()
    FC_ASSERT( STEEM_HARDFORK_0_22 == 22, "Invalid hardfork configuration" );
    _hardfork_versions.times[ STEEM_HARDFORK_0_22 ] = fc::time_point_sec( STEEM_HARDFORK_0_22_TIME );
    _hardfork_versions.versions[ STEEM_HARDFORK_0_22 ] = STEEM_HARDFORK_0_22_VERSION;
-#ifdef IS_TEST_NET
+   // MELEK: HF 0.23 (SMT) is active at genesis on BOTH testnet AND mainnet (0_23.hf time=1).
+   // Removed the `#ifdef IS_TEST_NET` guard — STEEM_NUM_HARDFORKS==23 in both builds, so mainnet
+   // must also initialize versions[23] or init_hardforks asserts (hardfork_version(0.23) == 0).
    FC_ASSERT( STEEM_HARDFORK_0_23 == 23, "Invalid hardfork configuration" );
    _hardfork_versions.times[ STEEM_HARDFORK_0_23 ] = fc::time_point_sec( STEEM_HARDFORK_0_23_TIME );
    _hardfork_versions.versions[ STEEM_HARDFORK_0_23 ] = STEEM_HARDFORK_0_23_VERSION;
-#endif
+
+   // MELEK HF24 (Move fork): scheduled activation (0_24.hf sets the time; mainnet future, testnet=1).
+   FC_ASSERT( STEEM_HARDFORK_0_24 == 24, "Invalid hardfork configuration" );
+   _hardfork_versions.times[ STEEM_HARDFORK_0_24 ] = fc::time_point_sec( STEEM_HARDFORK_0_24_TIME );
+   _hardfork_versions.versions[ STEEM_HARDFORK_0_24 ] = STEEM_HARDFORK_0_24_VERSION;
+
+   // MELEK HF25 (native EVM surface freeze): reserves the evm_* op tags, the SPACE_ID-21 EVM
+   // state objects and the evm_state_checkpoint required-action. All bodies are HF-gated no-ops
+   // in P0 — the evmone-backed turn-on is a later plugin-internal / behavior change. Note: the
+   // "move attester payout" work colloquially called HF25 is a TIME gate that consumes no
+   // hardfork number, so 25 is the next free sequential slot in the ladder.
+   FC_ASSERT( STEEM_HARDFORK_0_25 == 25, "Invalid hardfork configuration" );
+   _hardfork_versions.times[ STEEM_HARDFORK_0_25 ] = fc::time_point_sec( STEEM_HARDFORK_0_25_TIME );
+   _hardfork_versions.versions[ STEEM_HARDFORK_0_25 ] = STEEM_HARDFORK_0_25_VERSION;
+
+   // MELEK HF26 ("no downvotes"): gates the negative-vote rejection in the vote/vote2 evaluators
+   // and retires the downvote mana pool (downvote_pool_percent -> 0). Scheduled activation
+   // (0_26.hf sets the time; mainnet future placeholder, testnet=1). versions[26] MUST be set
+   // here or the STEEM_BLOCKCHAIN_HARDFORK_VERSION == versions[NUM_HARDFORKS] sanity check fails.
+   FC_ASSERT( STEEM_HARDFORK_0_26 == 26, "Invalid hardfork configuration" );
+   _hardfork_versions.times[ STEEM_HARDFORK_0_26 ] = fc::time_point_sec( STEEM_HARDFORK_0_26_TIME );
+   _hardfork_versions.versions[ STEEM_HARDFORK_0_26 ] = STEEM_HARDFORK_0_26_VERSION;
+
+   // MELEK HF27 (content & curation rewards fix): gates the null-feed bypass in
+   // cashout_comment_helper. Scheduled activation (0_27.hf sets the time; mainnet placeholder,
+   // testnet=1). versions[27] MUST be set here or the
+   // STEEM_BLOCKCHAIN_HARDFORK_VERSION == versions[NUM_HARDFORKS] sanity check fails.
+   FC_ASSERT( STEEM_HARDFORK_0_27 == 27, "Invalid hardfork configuration" );
+   _hardfork_versions.times[ STEEM_HARDFORK_0_27 ] = fc::time_point_sec( STEEM_HARDFORK_0_27_TIME );
+   _hardfork_versions.versions[ STEEM_HARDFORK_0_27 ] = STEEM_HARDFORK_0_27_VERSION;
 
 
    const auto& hardforks = get_hardfork_property_object();
@@ -5313,6 +5529,67 @@ void database::apply_hardfork( uint32_t hardfork )
             gpo.target_votes_per_period = STEEM_VOTES_PER_PERIOD_SMT_HF;
          });
 
+         break;
+      }
+      case STEEM_HARDFORK_0_24:
+      {
+         // MELEK Move fork: shift 15% of block emission from the content(blog) pool to the Move pool.
+         modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
+         {
+            gpo.content_reward_percent = STEEM_CONTENT_REWARD_PERCENT_HF24;   // 65 -> 50
+         });
+
+         // Create the chain-level Move REWARD FUND — a reward_fund_object exactly like the "post"
+         // blog pool. NO account, no key, no signer. percent_content_rewards = 0 so pay_reward_funds
+         // never touches it; it is credited directly from emission in process_funds and distributed
+         // to walkers by move-weight.
+         auto* move_rf = find< reward_fund_object, by_name >( STEEM_MOVE_REWARD_FUND_NAME );
+         if( move_rf == nullptr )
+         {
+            create< reward_fund_object >( [&]( reward_fund_object& rfo )
+            {
+               rfo.name                     = STEEM_MOVE_REWARD_FUND_NAME;
+               rfo.last_update              = head_block_time();
+               rfo.content_constant         = STEEM_CONTENT_CONSTANT_HF21;
+               rfo.percent_curation_rewards = 0;
+               rfo.percent_content_rewards  = 0;   // fed directly from emission, not by pay_reward_funds
+               rfo.reward_balance           = asset( 0, STEEM_SYMBOL );
+               rfo.author_reward_curve      = convergent_linear;
+               rfo.curation_reward_curve    = convergent_square_root;
+            });
+         }
+         break;
+      }
+      case STEEM_HARDFORK_0_25:
+      {
+         // MELEK EVM surface freeze (HF25): no state migration. The evm_* op tags, the
+         // SPACE_ID-21 EVM state objects and the evm_state_checkpoint required-action are all
+         // reserved at compile time; turning the EVM ON is a later plugin/behavior change, so
+         // there is nothing to do on activation. Explicit no-op case (documented, not default).
+         break;
+      }
+      case STEEM_HARDFORK_0_26:
+      {
+         // MELEK "no downvotes" fork (HF26). The negative-vote rejection is enforced in the
+         // vote/vote2 evaluators (gated on this hardfork). Here we retire the downvote MANA
+         // POOL so no further downvote mana is allocated: zero downvote_pool_percent. The
+         // existing negative-weight code paths in the evaluators are all guarded by
+         // `downvote_pool_percent != 0` (and, at/after HF26, are unreachable anyway because a
+         // negative vote is rejected first), so zeroing it is safe and avoids any divide-by
+         // downvote_pool_percent. account_object.downvote_manabar is left in place (dropping a
+         // serialized member is a separate state migration); it simply stops being replenished.
+         modify( get_dynamic_global_properties(), [&]( dynamic_global_property_object& gpo )
+         {
+            gpo.downvote_pool_percent = 0;
+         });
+         break;
+      }
+      case STEEM_HARDFORK_0_27:
+      {
+         // MELEK content & curation rewards fix (HF27). The behaviour change lives in
+         // cashout_comment_helper (gated on this hardfork); there is no state migration to do
+         // here. Deliberately a no-op: comments already settled at zero stay settled — a payout
+         // cannot be re-run after the fact — and from this block on, cashouts pay normally.
          break;
       }
       default:

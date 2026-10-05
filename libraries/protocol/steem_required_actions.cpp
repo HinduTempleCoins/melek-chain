@@ -110,4 +110,17 @@ bool operator==( const smt_founder_payout_action& lhs, const smt_founder_payout_
       lhs.reward_balance == rhs.reward_balance;
 }
 
+// MELEK EVM state checkpoint (P0 reservation). No structural bounds to enforce yet.
+void evm_state_checkpoint_action::validate() const {}
+
+bool operator==( const evm_state_checkpoint_action& lhs, const evm_state_checkpoint_action& rhs )
+{
+   return
+      lhs.block_num == rhs.block_num &&
+      lhs.evm_state_root == rhs.evm_state_root &&
+      lhs.evm_receipts_root == rhs.evm_receipts_root &&
+      lhs.prev_checkpoint == rhs.prev_checkpoint &&
+      lhs.evm_tx_count == rhs.evm_tx_count;
+}
+
 } } //steem::protocol

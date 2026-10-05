@@ -1,0 +1,5 @@
+{
+   "plugin_name": "evm",
+   "plugin_namespace": "evm",
+   "plugin_project": "evm_plugin"
+}
