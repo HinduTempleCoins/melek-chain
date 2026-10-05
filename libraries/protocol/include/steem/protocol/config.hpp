@@ -10,7 +10,7 @@
 // This is checked by get_config_check.sh called from Dockerfile
 
 #ifdef IS_TEST_NET
-#define STEEM_BLOCKCHAIN_VERSION              ( version(0, 26, 0) )
+#define STEEM_BLOCKCHAIN_VERSION              ( version(0, 27, 0) )
 #define STEEM_NETWORK_TYPE                    "testnet"
 
 #define STEEM_INIT_PRIVATE_KEY                (fc::ecc::private_key::regenerate(fc::sha256::hash(std::string("init_key"))))
@@ -49,7 +49,7 @@
 // MELEK: 0.23.0 so the SMT hardfork (HF23) is active from genesis on mainnet,
 // matching the live testnet. Was 0.22.1, which left STEEM_NUM_HARDFORKS at 22
 // and would have silently disabled SMTs on the mainnet build.
-#define STEEM_BLOCKCHAIN_VERSION              ( version(0, 26, 0) )
+#define STEEM_BLOCKCHAIN_VERSION              ( version(0, 27, 0) )
 #define STEEM_NETWORK_TYPE                    "mainnet"
 
 // FIXME: Witness operator MUST replace before mainnet launch.

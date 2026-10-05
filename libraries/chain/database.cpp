@@ -1930,13 +1930,34 @@ share_type database::cashout_comment_helper( util::comment_reward_context& ctx, 
 
          uint64_t reward = util::get_rshare_reward( ctx );
 
-         // If it is payout dust
-         if( util::to_sbd( current_steem_price, asset( reward, STEEM_SYMBOL ) ) < STEEM_MIN_PAYOUT_SBD )
-            reward = 0;
+         // MELEK HF27 — content & curation rewards fix. See hardfork.d/0_27.hf for the full
+         // write-up. Both guards below convert through the MBD median feed, and
+         // util::to_sbd()/util::to_steem() return ZERO when that price is null. On MELEK the feed
+         // is permanently null (STEEM_MIN_FEEDS == STEEM_MAX_WITNESSES/3 == 7 but the chain has 5
+         // witnesses, so update_median_feed can never reach the quorum), which zeroed every author
+         // and curation payout from genesis onward — twice over, since max_steem also collapsed to
+         // 0. This chain has no MBD by design, so the MBD-denominated dust check and the
+         // MBD-denominated max_accepted_payout clamp are both meaningless here.
+         //
+         // Pre-HF27 blocks keep the old behaviour so a from-genesis replay reproduces the zero
+         // payouts that actually happened.
+         if( has_hardfork( STEEM_HARDFORK_0_27 ) && current_steem_price.is_null() )
+         {
+            // The one piece of that logic that still means something without a price: an author
+            // who set max_accepted_payout to 0 is explicitly declining payout. Honour it.
+            if( comment.max_accepted_payout.amount.value == 0 )
+               reward = 0;
+         }
+         else
+         {
+            // If it is payout dust
+            if( util::to_sbd( current_steem_price, asset( reward, STEEM_SYMBOL ) ) < STEEM_MIN_PAYOUT_SBD )
+               reward = 0;
 
-         uint64_t max_steem = util::to_steem( current_steem_price, comment.max_accepted_payout ).amount.value;
+            uint64_t max_steem = util::to_steem( current_steem_price, comment.max_accepted_payout ).amount.value;
 
-         reward = std::min( reward, max_steem );
+            reward = std::min( reward, max_steem );
+         }
 
          uint128_t reward_tokens = uint128_t( reward );
 
@@ -5082,6 +5103,14 @@ void database::init_hardforks()
    _hardfork_versions.times[ STEEM_HARDFORK_0_26 ] = fc::time_point_sec( STEEM_HARDFORK_0_26_TIME );
    _hardfork_versions.versions[ STEEM_HARDFORK_0_26 ] = STEEM_HARDFORK_0_26_VERSION;
 
+   // MELEK HF27 (content & curation rewards fix): gates the null-feed bypass in
+   // cashout_comment_helper. Scheduled activation (0_27.hf sets the time; mainnet placeholder,
+   // testnet=1). versions[27] MUST be set here or the
+   // STEEM_BLOCKCHAIN_HARDFORK_VERSION == versions[NUM_HARDFORKS] sanity check fails.
+   FC_ASSERT( STEEM_HARDFORK_0_27 == 27, "Invalid hardfork configuration" );
+   _hardfork_versions.times[ STEEM_HARDFORK_0_27 ] = fc::time_point_sec( STEEM_HARDFORK_0_27_TIME );
+   _hardfork_versions.versions[ STEEM_HARDFORK_0_27 ] = STEEM_HARDFORK_0_27_VERSION;
+
 
    const auto& hardforks = get_hardfork_property_object();
    FC_ASSERT( hardforks.last_hardfork <= STEEM_NUM_HARDFORKS, "Chain knows of more hardforks than configuration", ("hardforks.last_hardfork",hardforks.last_hardfork)("STEEM_NUM_HARDFORKS",STEEM_NUM_HARDFORKS) );
@@ -5553,6 +5582,14 @@ void database::apply_hardfork( uint32_t hardfork )
          {
             gpo.downvote_pool_percent = 0;
          });
+         break;
+      }
+      case STEEM_HARDFORK_0_27:
+      {
+         // MELEK content & curation rewards fix (HF27). The behaviour change lives in
+         // cashout_comment_helper (gated on this hardfork); there is no state migration to do
+         // here. Deliberately a no-op: comments already settled at zero stay settled — a payout
+         // cannot be re-run after the fact — and from this block on, cashouts pay normally.
          break;
       }
       default:

@@ -17,4 +17,5 @@
 // (Was: 23 under IS_TEST_NET, 22 otherwise.)
 // HF24 = Move fork. HF25 = native-EVM surface freeze (P0 reservation; bodies HF-gated no-ops).
 // HF26 = "no downvotes" — gates the negative-vote rejection + retires the downvote mana pool.
-#define STEEM_NUM_HARDFORKS 26
+// HF27 = content/curation rewards fix — stop the null MBD feed zeroing every payout.
+#define STEEM_NUM_HARDFORKS 27

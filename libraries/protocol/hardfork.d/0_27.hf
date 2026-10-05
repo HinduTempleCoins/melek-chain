@@ -1,0 +1,57 @@
+#ifndef STEEM_HARDFORK_0_27
+#define STEEM_HARDFORK_0_27 27
+
+// MELEK content & curation rewards fix (HF27).
+//
+// THE BUG THIS FIXES: no author or curation reward has EVER been paid on MELEK mainnet. Every
+// account on the chain reports posting_rewards == 0 and curation_rewards == 0, from genesis
+// (2026-07-12) onward, while the "post" reward fund has swollen past 730,000 MELEK because
+// nothing ever leaves it. Posts reach cashout normally — cashout_time flips to the "settled"
+// sentinel — and credit nothing.
+//
+// WHY: cashout_comment_helper() guards the payout with two conversions through the MBD median
+// price feed, and util::to_sbd()/util::to_steem() BOTH return zero when that price is null:
+//
+//     if( util::to_sbd( current_steem_price, asset( reward, STEEM_SYMBOL ) ) < STEEM_MIN_PAYOUT_SBD )
+//        reward = 0;                                             // 0.000 MBD < 0.020 MBD  -> always true
+//     uint64_t max_steem = util::to_steem( current_steem_price, comment.max_accepted_payout ).amount.value;
+//     reward = std::min( reward, max_steem );                    // max_steem == 0          -> always zero
+//
+// So the payout is zeroed twice over, independently.
+//
+// AND THE PRICE CAN NEVER BE NON-NULL ON THIS CHAIN. update_median_feed() only writes a median
+// when feeds.size() >= STEEM_MIN_FEEDS, and MELEK defines STEEM_MIN_FEEDS as
+// STEEM_MAX_WITNESSES/3 == 7 (stock Steem uses /7 == 3). The chain has FIVE witness accounts
+// (maat, seshat, thoth, hathor, initminer; num_scheduled_witnesses == 5), so at most five feeds
+// can ever be collected. 5 < 7, permanently. No witness has ever published a feed either
+// (last_sbd_exchange_update == 1970-01-01 on all five), but publishing would not help.
+//
+// This is not a misconfiguration — it is vestigial Steem machinery on a chain that deliberately
+// has no second token. CLAUDE.md: "Single token: MELEK is the only on-chain token. No SBD/HBD/BBD
+// equivalent, no stablecoin pair, no internal currency conversion logic. Witnesses publish price
+// feeds informationally." current_sbd_supply is 0.000 MBD and STEEM_SBD_START_PERCENT_HF20 is 0,
+// so no MBD exists or will ever be printed. The chain's own stated design — "every MELEK in
+// circulation must be earned through block production, content rewards, or curation rewards" —
+// has therefore been violated since launch: only block production has ever paid.
+//
+// WHAT HF27 DOES: when the median price is null, skip both MBD-denominated guards. The only part
+// of that logic with meaning on a single-token chain is max_accepted_payout == 0, i.e. an author
+// explicitly declining payout, which is preserved exactly.
+//
+// WHY GATED: this changes payout amounts, so patched and unpatched nodes would compute different
+// state and fork apart. Gating keeps every pre-HF27 block replaying exactly as it was produced
+// (a from-genesis replay must still reproduce the zero payouts that really happened) and flips
+// the rule for all upgraded nodes together at the HF27 block.
+//
+// NOT RETROACTIVE: comments already settled at zero are settled. Only comments whose cashout
+// falls at or after the HF27 block can pay. Set the activation time accordingly — every hour of
+// delay permanently zeroes more posts that are currently inside their 7-day window.
+#ifdef IS_TEST_NET
+#define STEEM_HARDFORK_0_27_TIME 1            // testnet/devnet: active immediately on the upgraded binary
+#else
+#define STEEM_HARDFORK_0_27_TIME 1924992000   // mainnet: PLACEHOLDER (2031-01-01 00:00 UTC). SET A REAL COORDINATED TIME before deploy — see HARDFORK_BUNDLE.md.
+#endif
+
+#define STEEM_HARDFORK_0_27_VERSION hardfork_version( 0, 27 )
+
+#endif
