@@ -239,7 +239,7 @@ static_assert( STEEM_SBD_INIT_SUPPLY == 0, "MELEK mainnet must have zero SBD/MBD
 // MELEK/hr inflow) keeps the first walkers from scooping it and slowly draws the reserve down. A
 // monotonic epoch guard on the dgpo (last_move_pay_epoch) blocks replay/reorder. Time-gated => every
 // node flips together (consensus-safe). The signer account + cap below are the two operator knobs.
-#define MELEK_MOVE_ATTESTER_PAY_TIME          1785817800              // 2026-08-04T04:30:00 UTC (11:30pm CDT Aug 3) — RE-CONFIRM before deploy; must be safely AFTER the rolling restart of all witnesses
+#define MELEK_MOVE_ATTESTER_PAY_TIME          1791403200              // 2026-10-07T20:00:00 UTC — bumped from 1785817800 (Aug 4), which was TWO MONTHS IN THE PAST and would have fired the instant each node restarted, forking upgraded nodes away from un-upgraded ones mid-roll.
 #define MELEK_MOVE_ATTESTER                   ("hathor")              // account whose ACTIVE authority must sign a move_pay op (swappable)
 #define MELEK_MOVE_EPOCH_PAY_CAP_AMOUNT       (int64_t( 150000 ))     // 150.000 MELEK max drawn per epoch (precision 3); inflow ~135/hr, so the small surplus slowly drains the reserve
 

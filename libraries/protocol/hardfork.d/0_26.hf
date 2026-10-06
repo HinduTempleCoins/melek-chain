@@ -27,7 +27,7 @@
 #ifdef IS_TEST_NET
 #define STEEM_HARDFORK_0_26_TIME 1            // testnet/devnet: active immediately on the upgraded binary
 #else
-#define STEEM_HARDFORK_0_26_TIME 1924992000   // mainnet: PLACEHOLDER (2031-01-01 00:00 UTC). RE-CONFIRM a real coordinated activation window before any mainnet deploy.
+#define STEEM_HARDFORK_0_26_TIME 1791403200   // mainnet: 2026-10-07T20:00:00 UTC — coordinated activation, operator-set 2026-10-06
 #endif
 
 #define STEEM_HARDFORK_0_26_VERSION hardfork_version( 0, 26 )
