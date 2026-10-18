@@ -622,6 +622,10 @@ namespace steem { namespace chain {
 
          block_log                     _block_log;
 
+         // MELEK: path to the persisted reversible (post-LIB) blocks. Written on close(),
+         // reloaded on open() so a restart resumes at HEAD instead of rewinding to LIB.
+         fc::path                      _reversible_blocks_file;
+
          // this function needs access to _plugin_index_signal
          template< typename MultiIndexType >
          friend void add_plugin_index( database& db );

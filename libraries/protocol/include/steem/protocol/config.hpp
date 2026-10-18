@@ -3,13 +3,14 @@
  */
 #pragma once
 #include <steem/protocol/hardfork.hpp>
+#include <steem/protocol/melek_genesis_inscription.hpp>
 
 // WARNING!
 // Every symbol defined here needs to be handled appropriately in get_config.cpp
 // This is checked by get_config_check.sh called from Dockerfile
 
 #ifdef IS_TEST_NET
-#define STEEM_BLOCKCHAIN_VERSION              ( version(0, 23, 0) )
+#define STEEM_BLOCKCHAIN_VERSION              ( version(0, 25, 0) )
 #define STEEM_NETWORK_TYPE                    "testnet"
 
 #define STEEM_INIT_PRIVATE_KEY                (fc::ecc::private_key::regenerate(fc::sha256::hash(std::string("init_key"))))
@@ -45,7 +46,10 @@
 
 #else // IS LIVE MELEK NETWORK (forked from STEEM/BLURT — see HinduTempleCoins/MELEK CLAUDE.md)
 
-#define STEEM_BLOCKCHAIN_VERSION              ( version(0, 22, 1) )
+// MELEK: 0.23.0 so the SMT hardfork (HF23) is active from genesis on mainnet,
+// matching the live testnet. Was 0.22.1, which left STEEM_NUM_HARDFORKS at 22
+// and would have silently disabled SMTs on the mainnet build.
+#define STEEM_BLOCKCHAIN_VERSION              ( version(0, 25, 0) )
 #define STEEM_NETWORK_TYPE                    "mainnet"
 
 // FIXME: Witness operator MUST replace before mainnet launch.
@@ -53,13 +57,16 @@
 // in dev/testnet builds. Matching private key: regenerate(sha256::hash("melek_init_key")).
 #define STEEM_INIT_PRIVATE_KEY                (fc::ecc::private_key::regenerate(fc::sha256::hash(std::string("melek_init_key"))))
 #define STEEM_INIT_PUBLIC_KEY_STR             (std::string( steem::protocol::public_key_type(STEEM_INIT_PRIVATE_KEY.get_public_key()) ))
-#define STEEM_CHAIN_ID                        (fc::sha256::hash(std::string("melek-mainnet-v1-genesis")))
+// MELEK mainnet chain id = SHA-256 of the verified 255-byte genesis inscription. The inscription IS
+// the chain's cryptographic identity — a node with a different inscription is a different chain.
+#define STEEM_CHAIN_ID                        (fc::sha256::hash(std::string(MELEK_GENESIS_HEADLINE)))
 #define STEEM_ADDRESS_PREFIX                  "MELEK"
 
 // FIXME: Replace with actual launch UNIX timestamp before genesis block.
 // Placeholder: 2026-06-01 00:00:00 UTC.
-#define STEEM_GENESIS_TIME                    (fc::time_point_sec(1748736000))
-#define STEEM_MINING_TIME                     (fc::time_point_sec(1748736000))
+// MELEK GENESIS: 7:12 AM Central (CDT) on 7/12/2026 = 12:12:00 UTC = unix 1783858320. Block Zero.
+#define STEEM_GENESIS_TIME                    (fc::time_point_sec(1783858320))
+#define STEEM_MINING_TIME                     (fc::time_point_sec(1783858320))
 #define STEEM_CASHOUT_WINDOW_SECONDS_PRE_HF12 (60*60*24)    /// 1 day
 #define STEEM_CASHOUT_WINDOW_SECONDS_PRE_HF17 (60*60*12)    /// 12 hours
 #define STEEM_CASHOUT_WINDOW_SECONDS          (60*60*24*7)  /// 7 days
@@ -156,6 +163,12 @@ static_assert( STEEM_SBD_INIT_SUPPLY == 0, "MELEK mainnet must have zero SBD/MBD
 #define STEEM_MAX_RUNNER_WITNESSES_HF17       1
 
 #define STEEM_HARDFORK_REQUIRED_WITNESSES     17 // 17 of the 21 dpos witnesses (20 elected and 1 virtual time) required for hardfork. This guarantees 75% participation on all subsequent rounds.
+// MELEK: 17 (sized for a 21-witness chain) exceeds MELEK's launch witness count (5), so the hardfork-vote
+// majority could never be reached and NO post-genesis hardfork (e.g. HF24) could ever activate. After
+// MELEK_HF_REQ_WITNESSES_FIX_TIME every node lowers the requirement together (time-gated => consensus-safe,
+// exactly like a hardfork) to a value sized for the small witness set.
+#define MELEK_HARDFORK_REQUIRED_WITNESSES     4          // 4 of 5 (matches finality's 4/5 supermajority)
+#define MELEK_HF_REQ_WITNESSES_FIX_TIME       1784260800 // 2026-07-17T04:00:00 UTC
 #define STEEM_MAX_TIME_UNTIL_EXPIRATION       (60*60) // seconds,  aka: 1 hour
 #define STEEM_MAX_MEMO_SIZE                   2048
 #define STEEM_MAX_PROXY_RECURSION_DEPTH       4
@@ -194,6 +207,48 @@ static_assert( STEEM_SBD_INIT_SUPPLY == 0, "MELEK mainnet must have zero SBD/MBD
 
 #define STEEM_CONTENT_REWARD_PERCENT_HF21     (65*STEEM_1_PERCENT)
 #define STEEM_PROPOSAL_FUND_PERCENT_HF21      (10*STEEM_1_PERCENT)
+
+// MELEK Move fork (HF24): 15% of block emission moves from the content(blog) pool into a chain-level
+// Move REWARD FUND (a reward_fund_object, exactly like the "post" blog pool — no account). content
+// 65 -> 50; the 15 points become MELEK_MOVE_FUND_PERCENT, credited to the "move" reward fund each block.
+#define STEEM_CONTENT_REWARD_PERCENT_HF24     (50*STEEM_1_PERCENT)
+#define MELEK_MOVE_FUND_PERCENT               (15*STEEM_1_PERCENT)
+#define STEEM_MOVE_REWARD_FUND_NAME           ("move")
+// MELEK move-to-earn PAYOUT: after this time, a top-level post whose category ("move") matches the
+// move fund is paid from the "move" reward fund at cashout — exactly the way ordinary posts are paid
+// from the "post" fund. The chain credits the walker/author's reward-balance directly (they claim it
+// like any author); NO relay account holds or sends the pool (a relay would be a hack target). The
+// off-chain Move settlement posts each walker's epoch as a "move" post and realizes move-weight as
+// rshares via a move-attester's proportional vote. Time-gated => every node switches together
+// (consensus-safe), no new hardfork number needed.
+#define MELEK_MOVE_PAYOUT_TIME                1785038400  // 2026-07-26T04:00:00 UTC (aligned flip)
+// MELEK LIQUID MINING: after this time the block-producer reward is paid as LIQUID MELEK to the
+// witness (spendable), instead of vesting it. Mined MELEK is meant to be given away — the founding
+// witness (Hathor) grants newcomers a share of what it mines, which needs the reward to be liquid.
+// Time-gated => all nodes flip together (consensus-safe), no new hardfork number. Does NOT touch
+// STEEM_GENESIS_TIME (the July 12 launch date) — this is only a feature-activation flip.
+#define MELEK_LIQUID_MINING_TIME              1785038400  // 2026-07-26T04:00:00 UTC
+
+// MELEK MOVE ATTESTER PAYOUT ("HF25", a time-gated flip — no new hardfork number, same as the two flips
+// above). SUPERSEDES the post-based move payout (MELEK_MOVE_PAYOUT_TIME): Move is WALKING, not blogging,
+// so after this time the "move" reward fund is NOT paid via posts at all. Instead a single staked attester
+// broadcasts a custom_json (id "move_pay") for each CLOSED walk-epoch carrying that hour's walk-weights
+// [ ["account", weight], ... ]; the chain pays each walker their pro-rata slice of a per-epoch CAP drawn
+// from the "move" fund, straight to liquid balance — no relay, no hathor transfer, no posts. The pool is a
+// RESERVE; the cap (~slightly above the ~135 MELEK/hr inflow) stops the first walkers scooping it. Monotonic
+// dgpo.last_move_pay_epoch guard blocks replay. Time-gated => every node flips together (consensus-safe).
+#define MELEK_MOVE_ATTESTER_PAY_TIME          1785888600              // 2026-08-05T00:10:00 UTC (7:10pm CDT Aug 4)
+#define MELEK_MOVE_ATTESTER                   ("hathor")              // account whose ACTIVE authority signs move_pay (swappable)
+#define MELEK_MOVE_ATTESTER_V2                ("moveoracle")          // dedicated move-oracle: signs move_pay after the switch gate
+#define MELEK_MOVE_ATTESTER_SWITCH_TIME       1786147200              // attester switches hathor -> moveoracle at this time
+#define MELEK_MOVE_EPOCH_PAY_CAP_AMOUNT       (int64_t( 150000 ))     // 150.000 MELEK max drawn per epoch (precision 3)
+
+// MELEK RECENT_CLAIMS RESET: MELEK launched at HF24 and inherited STEEM_HF21_CONVERGENT_LINEAR_RECENT_CLAIMS
+// (~5.04e17, Steem-scale). On MELEK (~1,200 VESTS) it divides every payout to ~0. Reset the post reward
+// fund recent_claims ONCE at an exact block to a MELEK value; 15-day decay self-tunes. Block-gated =>
+// all nodes flip together (consensus-safe); idempotent.
+#define MELEK_RECENT_CLAIMS_RESET_BLOCK       272000  // recut ~3h out
+#define MELEK_RECENT_CLAIMS_RESET_VALUE       (fc::uint128_t(0,1000000000000ull)) // 1e12 -> voted post ~0.4-0.9 MELEK; tunable
 
 #define STEEM_HF21_CONVERGENT_LINEAR_RECENT_CLAIMS (fc::uint128_t(0,503600561838938636ull))
 #define STEEM_CONTENT_CONSTANT_HF21           (fc::uint128_t(0,2000000000000ull))
@@ -328,7 +383,7 @@ static_assert( STEEM_SBD_INIT_SUPPLY == 0, "MELEK mainnet must have zero SBD/MBD
 #define STEEM_CONVERSION_DELAY                (fc::hours(STEEM_FEED_HISTORY_WINDOW)) //3.5 day conversion
 
 #define STEEM_MIN_UNDO_HISTORY                10
-#define STEEM_MAX_UNDO_HISTORY                10000
+#define STEEM_MAX_UNDO_HISTORY                2000000
 
 #define STEEM_MIN_TRANSACTION_EXPIRATION_LIMIT (STEEM_BLOCK_INTERVAL * 5) // 5 transactions per block
 #define STEEM_BLOCKCHAIN_PRECISION            uint64_t( 1000 )

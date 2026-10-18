@@ -265,6 +265,13 @@ void update_witness_schedule4( database& db )
 
    auto majority_version = wso.majority_version;
 
+   // MELEK: lower the hardfork-vote requirement to a small-chain value, time-gated so every node
+   // switches at the same block (consensus-safe). Before the fix time this is a no-op (uses the
+   // stored value == STEEM_HARDFORK_REQUIRED_WITNESSES). See MELEK_HARDFORK_REQUIRED_WITNESSES.
+   uint32_t required_witnesses = wso.hardfork_required_witnesses;
+   if( db.head_block_time() >= fc::time_point_sec( MELEK_HF_REQ_WITNESSES_FIX_TIME ) )
+      required_witnesses = MELEK_HARDFORK_REQUIRED_WITNESSES;
+
    if( db.has_hardfork( STEEM_HARDFORK_0_5__54 ) )
    {
       flat_map< version, uint32_t, std::greater< version > > witness_versions;
@@ -293,7 +300,7 @@ void update_witness_schedule4( database& db )
       {
          witnesses_on_version += ver_itr->second;
 
-         if( witnesses_on_version >= wso.hardfork_required_witnesses )
+         if( witnesses_on_version >= required_witnesses )
          {
             majority_version = ver_itr->first;
             break;
@@ -306,7 +313,7 @@ void update_witness_schedule4( database& db )
 
       while( hf_itr != hardfork_version_votes.end() )
       {
-         if( hf_itr->second >= wso.hardfork_required_witnesses )
+         if( hf_itr->second >= required_witnesses )
          {
             const auto& hfp = db.get_hardfork_property_object();
             if( hfp.next_hardfork != std::get<0>( hf_itr->first ) ||

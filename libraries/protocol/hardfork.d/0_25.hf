@@ -1,0 +1,43 @@
+#ifndef STEEM_HARDFORK_0_25
+#define STEEM_HARDFORK_0_25 25
+
+// MELEK content & curation rewards fix (HF25 on the production lineage).
+//
+// THE BUG: no author or curation reward has EVER been paid on MELEK mainnet. Every account
+// reports posting_rewards == 0 and curation_rewards == 0 from genesis onward, while the "post"
+// reward fund swells because nothing leaves it. Posts reach cashout and credit nothing.
+//
+// WHY: cashout_comment_helper() guards the payout with two conversions through the MBD median
+// price feed, and util::to_sbd()/util::to_steem() BOTH return zero when that price is null:
+//
+//     if( util::to_sbd( price, asset( reward, STEEM_SYMBOL ) ) < STEEM_MIN_PAYOUT_SBD )
+//        reward = 0;                                    // 0.000 MBD < 0.020 MBD -> always true
+//     uint64_t max_steem = util::to_steem( price, comment.max_accepted_payout ).amount.value;
+//     reward = std::min( reward, max_steem );           // max_steem == 0 -> always zero
+//
+// The payout is zeroed twice over, independently.
+//
+// AND THE PRICE CAN NEVER BE NON-NULL HERE. update_median_feed() only writes a median when
+// feeds.size() >= STEEM_MIN_FEEDS == STEEM_MAX_WITNESSES/3 == 7, and this chain has FIVE witness
+// accounts. 5 < 7, permanently. MELEK is single-token by design: current_sbd_supply is 0.000 MBD
+// and no MBD will ever be printed, so both MBD-denominated guards are meaningless on this chain.
+//
+// WHAT HF25 DOES: when the median price is null, skip both MBD-denominated guards. The only part
+// with meaning on a single-token chain is max_accepted_payout == 0 (an author explicitly declining
+// payout), which is preserved exactly.
+//
+// WHY GATED: this changes payout amounts, so patched and unpatched nodes would compute different
+// state and fork apart. Gating keeps every pre-HF25 block replaying exactly as produced, and flips
+// the rule for all upgraded nodes together at the HF25 block.
+//
+// NOT RETROACTIVE: comments already settled at zero stay settled. Only comments whose cashout
+// falls at or after the HF25 block can pay.
+#ifdef IS_TEST_NET
+#define STEEM_HARDFORK_0_25_TIME 1            // testnet/devnet: active immediately on the upgraded binary
+#else
+#define STEEM_HARDFORK_0_25_TIME 1791403200   // mainnet: 2026-10-07T20:00:00 UTC
+#endif
+
+#define STEEM_HARDFORK_0_25_VERSION hardfork_version( 0, 25 )
+
+#endif
