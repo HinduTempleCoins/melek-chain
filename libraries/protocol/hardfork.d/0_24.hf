@@ -1,0 +1,16 @@
+#ifndef STEEM_HARDFORK_0_24
+#define STEEM_HARDFORK_0_24 24
+
+// MELEK Move fork (HF24): each block, carve 15% of the emission out of the content(blog) pool into
+// the chain-level Move REWARD FUND — a reward_fund_object named "move", exactly like the "post" blog
+// pool. NO account, no key, no signer. content_reward_percent drops 65 -> 50; the 15 points are
+// credited to the "move" fund every block, funded by the chain. Distributed to walkers by move-weight.
+#ifdef IS_TEST_NET
+#define STEEM_HARDFORK_0_24_TIME 1            // testnet: active immediately on the upgraded binary
+#else
+#define STEEM_HARDFORK_0_24_TIME 1784160000   // mainnet: 2026-07-16 00:00 UTC (confirm launch window)
+#endif
+
+#define STEEM_HARDFORK_0_24_VERSION hardfork_version( 0, 24 )
+
+#endif
