@@ -33,6 +33,35 @@ Oracle Cloud x86 VM, Ubuntu 22.04 LTS. The chain runs on Oracle infrastructure �
 
 MELEK → BLURT → Steem → Graphene → Cryptonomex. Source-file comments preserve this attribution. The community respects honest crediting of prior work.
 
+## Building and contributing
+
+MELEK builds like any Steem/Blurt-family node (C++14, CMake, Boost, OpenSSL):
+
+```bash
+git clone --recursive https://github.com/HinduTempleCoins/melek-chain.git
+cd melek-chain
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release ..
+make -j$(nproc) steemd cli_wallet
+```
+
+The production target is Ubuntu 22.04 LTS. [`doc/building.md`](doc/building.md)
+is inherited from Steem and still describes older Ubuntu releases; the package
+lists there are a starting point, not a guarantee. Corrections are welcome.
+
+Tests live in [`tests/`](tests/): configure a separate build with
+`-DBUILD_STEEM_TESTNET=ON`, then `make chain_test` and run `./tests/chain_test`.
+Consensus changes ship as numbered hardforks in
+[`libraries/protocol/hardfork.d/`](libraries/protocol/hardfork.d/); please do not
+change consensus behaviour outside a hardfork gate.
+
+Bugs and well-scoped improvements: open an issue at
+https://github.com/HinduTempleCoins/melek-chain/issues. Issues labelled
+`good first issue` are sized for a first contribution. Security problems: use
+GitHub's private vulnerability reporting (Security tab), not a public issue.
+
 ## License
 
-See [`LICENSE.md`](LICENSE.md).
+MIT. [`LICENSE.md`](LICENSE.md) is kept verbatim from Blurt and carries both the
+Blurt and the Steemit copyright notices; [`NOTICE`](NOTICE) credits both
+upstreams and covers MELEK's own changes.
