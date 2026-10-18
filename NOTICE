@@ -1,0 +1,20 @@
+MELEK blockchain node (melek-chain)
+Copyright (c) 2026 Rev. Ryan Sasha-Shai Van Kush and MELEK contributors
+
+MELEK is a fork of Blurt, which is a fork of Steem.
+
+This product includes software developed by the Blurt contributors
+(https://gitlab.com/blurt/blurt), Copyright (c) 2020 Blurt Contributors,
+released under the MIT License.
+
+This product includes software developed by Steemit, Inc. and contributors
+(https://github.com/steemit/steem), Copyright (c) 2019 Steemit, Inc., and
+contributors, released under the MIT License.
+
+Both upstream notices, and the MIT License text that covers this repository,
+are reproduced verbatim in LICENSE.md. MELEK's own changes are released under
+the same MIT License.
+
+Dependencies such as Graphene, FC and Boost are licensed by their own copyright
+holders under their own licenses; see the files in libraries/ and their
+upstream projects.
